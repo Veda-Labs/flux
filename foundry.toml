@@ -20,6 +20,7 @@ remappings = [
     "@boring-vault=lib/boring-vault/src/",
     "@uni-v3-p=lib/v3-periphery/contracts/",
     "@uni-v3-c=lib/v3-core/contracts/",
+    "@uni-v4-p=lib/v4-periphery/src/",
     "@uniswap/=lib/",
 ]
 
