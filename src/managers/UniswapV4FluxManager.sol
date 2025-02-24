@@ -2,6 +2,7 @@
 pragma solidity 0.8.21;
 
 import {FluxManager} from "src/FluxManager.sol";
+import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
 
 contract UniswapV4FluxManager is FluxManager {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

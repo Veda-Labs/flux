@@ -18,6 +18,8 @@ remappings = [
     "@ccip=lib/ccip/",
     "@oapp-auth=lib/OAppAuth/src/",
     "@boring-vault=lib/boring-vault/src/",
+    "@uni-v3-p=lib/v3-periphery/contracts/",
+    "@uni-v3-c=lib/v3-core/contracts/",
 ]
 
 [rpc_endpoints]
