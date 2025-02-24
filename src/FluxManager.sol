@@ -86,10 +86,6 @@ abstract contract FluxManager is Auth, IPausable {
         _refreshInternalFluxAccounting();
     }
 
-    function refreshExternalFluxAccounting() external requiresAuth {
-        _refreshExternalFluxAccounting();
-    }
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       FLUX VIEW                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -144,9 +140,6 @@ abstract contract FluxManager is Auth, IPausable {
 
     /// @notice Refresh internal flux constants(like ERC20 token balances)
     function _refreshInternalFluxAccounting() internal virtual;
-
-    /// @notice Refresh external flux constants(like Dex positions)
-    function _refreshExternalFluxAccounting() internal virtual;
 
     function _totalAssets(uint256 exchangeRate)
         internal

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.21;
 
-import {FluxManager} from "src/FluxManager.sol";
+import {FluxManager, FixedPointMathLib} from "src/FluxManager.sol";
 import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
+import {TickMath} from "@uni-v3-c/libraries/TickMath.sol";
 
 contract UniswapV4FluxManager is FluxManager {
+    using FixedPointMathLib for uint256;
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STRUCT                             */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -14,6 +17,12 @@ contract UniswapV4FluxManager is FluxManager {
         int24 tickLower;
         int24 tickUpper;
     }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                        CONSTANTS                           */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    uint256 internal constant PRECISION = 1e18;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STATE                              */
@@ -40,12 +49,10 @@ contract UniswapV4FluxManager is FluxManager {
     /// @notice Refresh internal flux constants.
     /// @dev For Uniswap V4 this is token0 and token1 contract balances
     function _refreshInternalFluxAccounting() internal override {
+        // TODO safecast
         token0Balance = uint128(token0.balanceOf(address(boringVault)));
         token1Balance = uint128(token1.balanceOf(address(boringVault)));
     }
-
-    /// @notice Refresh external flux constants(like Dex positions)
-    function _refreshExternalFluxAccounting() internal override {}
 
     function _totalAssets(uint256 exchangeRate)
         internal
@@ -53,10 +60,43 @@ contract UniswapV4FluxManager is FluxManager {
         override
         returns (uint256 token0Assets, uint256 token1Assets)
     {
-        return (0, 0);
+        token0Assets = token0Balance;
+        token1Assets = token1Balance;
+
+        // Calculate the current sqrtPrice.
+        uint256 ratioX192 = PRECISION.mulDivDown((10 ** decimals1) << 192, exchangeRate);
+        // TODO safecast
+        uint160 sqrtPriceX96 = uint160(_sqrt(ratioX192));
+
+        // Iterate through tracked position data and aggregate token balances
+        uint256 positionCount = trackedPositionData.length;
+        for (uint256 i; i < positionCount; ++i) {
+            (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
+                sqrtPriceX96,
+                TickMath.getSqrtRatioAtTick(trackedPositionData[i].tickLower),
+                TickMath.getSqrtRatioAtTick(trackedPositionData[i].tickLower),
+                trackedPositionData[i].liquidity
+            );
+            token0Assets += amount0;
+            token1Assets += amount1;
+        }
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  STRATEGIST FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                   INTERNAL FUNCTIONS                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Calculates the square root of the input.
+    function _sqrt(uint256 _x) internal pure returns (uint256 y) {
+        uint256 z = (_x + 1) / 2;
+        y = _x;
+        while (z < y) {
+            y = z;
+            z = (_x / z + z) / 2;
+        }
+    }
 }
