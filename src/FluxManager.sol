@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.24;
 
-import {Auth, Authority} from "@solmate/auth/Auth.sol";
-import {IPausable} from "@boring-vault/interfaces/IPausable.sol";
+import {Auth, Authority} from "@solmate/src/auth/Auth.sol";
 import {BoringVault} from "src/BoringVault.sol";
-import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
-import {ERC20} from "@solmate/tokens/ERC20.sol";
+import {FixedPointMathLib} from "@solmate/src/utils/FixedPointMathLib.sol";
+import {ERC20} from "@solmate/src/tokens/ERC20.sol";
 
 /// @notice Manager used for Flux Boring Vaults
 ///
 /// @dev
 /// This contract is responsible for gating calls the boring vault can make
 /// and for abstratcing the total assets calculation down to a flux function.
-abstract contract FluxManager is Auth, IPausable {
+abstract contract FluxManager is Auth {
     using FixedPointMathLib for uint256;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

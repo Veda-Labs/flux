@@ -10,7 +10,7 @@ fs_permissions = [{ access = "read-write", path = "./" }]
 deny_warnings = false
 
 remappings = [
-    "@solmate/=lib/solmate/src/",
+    "@solmate/=lib/solmate/",
     "@forge-std/=lib/forge-std/src/",
     "@ds-test/=lib/forge-std/lib/ds-test/src/",
     "ds-test/=lib/forge-std/lib/ds-test/src/",
