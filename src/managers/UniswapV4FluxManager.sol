@@ -86,6 +86,12 @@ contract UniswapV4FluxManager is FluxManager {
     /*                  STRATEGIST FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    function mint() external requiresAuth {}
+    function burn() external requiresAuth {}
+    function increaseLiquidity() external requiresAuth {}
+    function decreaseLiquidity() external requiresAuth {}
+    function collectFees() external requiresAuth {}
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                   INTERNAL FUNCTIONS                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
