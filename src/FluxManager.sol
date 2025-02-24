@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.21;
+pragma solidity 0.8.24;
 
 import {Auth, Authority} from "@solmate/auth/Auth.sol";
 import {IPausable} from "@boring-vault/interfaces/IPausable.sol";
-import {BoringVault} from "@boring-vault/base/BoringVault.sol";
+import {BoringVault} from "src/BoringVault.sol";
 import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "@solmate/tokens/ERC20.sol";
 

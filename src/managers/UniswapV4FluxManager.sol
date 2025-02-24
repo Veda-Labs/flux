@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.21;
+pragma solidity 0.8.24;
 
 import {FluxManager, FixedPointMathLib} from "src/FluxManager.sol";
 import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
