@@ -1,6 +1,72 @@
 [profile.default]
-src = "src"
-out = "out"
-libs = ["lib"]
+# Sets the concrete solc version to use
+# This overrides the `auto_detect_solc` value
+solc_version = '0.8.21'
+auto_detect_solc = false
+evm_version = 'cancun'
+optimizer = true
+optimizer_runs = 200
+fs_permissions = [{ access = "read-write", path = "./" }]
+deny_warnings = false
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+remappings = [
+    "@solmate/=lib/solmate/src/",
+    "@forge-std/=lib/forge-std/src/",
+    "@ds-test/=lib/forge-std/lib/ds-test/src/",
+    "ds-test/=lib/forge-std/lib/ds-test/src/",
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "@ccip=lib/ccip/",
+    "@oapp-auth=lib/OAppAuth/src/",
+    "@boring-vault=lib/boring-vault/src/",
+]
+
+[rpc_endpoints]
+mainnet = "${MAINNET_RPC_URL}"
+polygon = "${MATIC_RPC_URL}"
+bsc = "${BNB_RPC_URL}"
+avalanche = "${AVALANCHE_RPC_URL}"
+arbitrum = "${ARBITRUM_RPC_URL}"
+optimism = "${OPTIMISM_RPC_URL}"
+base = "${BASE_RPC_URL}"
+zircuit = "${ZIRCUIT_RPC_URL}"
+scroll = "${SCROLL_RPC_URL}"
+linea = "${LINEA_RPC_URL}"
+sonicMainnet = "${SONIC_MAINNET_RPC_URL}"
+sepolia = "${SEPOLIA_RPC_URL}"
+sonicTestnet = "${SONIC_TESTNET_RPC_URL}"
+corn = "${CORN_MAIZENET_RPC_URL}"
+swell = "${SWELL_CHAIN_RPC_URL}"
+bob = "${BOB_RPC_URL}"
+berachainTestnet = "${BERA_TESTNET_RPC_URL}"
+berachain = "${BERA_CHAIN_RPC_URL}"
+bartio = "${BARTIO_RPC_URL}"
+holesky = "${HOLESKY_RPC_URL}"
+
+[etherscan]
+corn = { key = "${CORNSCAN_KEY}", chain = 21000000, url = "https://api.routescan.io/v2/network/mainnet/evm/21000000/etherscan" }
+arbitrum = { key = "${ARBISCAN_KEY}" }
+mainnet = { key = "${ETHERSCAN_KEY}" }
+polygon = { key = "${POLYGONSCAN_KEY}" }
+bsc = { key = "${BSCSCAN_KEY}" }
+avalanche = { key = "${SNOWTRACE_KEY}" }
+optimism = { key = "${OPTIMISMSCAN_KEY}" }
+base = { key = "${BASESCAN_KEY}" }
+scroll = { key = "${SCROLLSCAN_KEY}" }
+sonicMainnet = { key = "${SONICSCAN_KEY}", chain = 146, url = "https://api.routescan.io/v2/network/mainnet/evm/146/etherscan" }
+swell = { key = "${SWELLSCAN_KEY}", chain = 1923, url = "https://explorer.swellnetwork.io:443/api/" }
+berachainTestnet = { key = "${BERASCAN_TESTNET_KEY}", chain = 80000, url = "https://api.routescan.io/v2/network/testnet/evm/80000/etherscan" }
+sepolia = { key = "${ETHERSCAN_KEY}" }
+berachain = { key = "verifyContract", chain = 80094, url = "https://api.routescan.io/v2/network/mainnet/evm/80094/etherscan" }
+bob = { key = "${BOBSCAN_KEY}", chain = 60808, url = "https://explorer.gobob.xyz/api?" }
+
+[fmt]
+FOUNDRY_FMT_LINE_LENGTH = 120
+FOUNDRY_FMT_TAB_WIDTH = 4
+FOUNDRY_FMT_BRACKET_SPACING = true
+FOUNDRY_FMT_INT_TYPES = "long"
+FOUNDRY_FMT_MULTILINE_FUNC_HEADER = "attributes_first"
+FOUNDRY_FMT_QUOTE_STYLE = "double"
+FOUNDRY_FMT_NUMBER_UNDERSCORE = "thousands"
+FOUNDRY_FMT_OVERRIDE_SPACING = true
+FOUNDRY_FMT_WRAP_COMMENTS = false
+FOUNDRY_FMT_IGNORE = []
