@@ -22,7 +22,7 @@ abstract contract FluxManager is Auth {
      * @notice Used to pause calls to `FluxManager`.
      */
     bool public isPaused;
-    uint8 public exchangeRateDecimals;
+    uint8 public exchangeRateDecimals = 18; //TODO
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         ERRORS                             */
@@ -54,7 +54,7 @@ abstract contract FluxManager is Auth {
         boringVault = BoringVault(payable(_boringVault));
         token0 = ERC20(_token0);
         token1 = ERC20(_token1);
-        decimals0 = token0.decimals();
+        decimals0 = _token0 == address(0) ? 18 : token0.decimals();
         decimals1 = token1.decimals();
         decimalsBoring = boringVault.decimals();
     }
