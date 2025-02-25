@@ -21,6 +21,7 @@ remappings = [
     "@uni-v3-p=lib/v3-periphery/contracts/",
     "@uni-v3-c=lib/v3-core/contracts/",
     "@uni-v4-p=lib/v4-periphery/src/",
+    "@uni-v4-c=lib/v4-core/src/",
     "@uniswap/=lib/",
 ]
 

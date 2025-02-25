@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.24;
 
-import {FluxManager, FixedPointMathLib} from "src/FluxManager.sol";
+import {FluxManager, FixedPointMathLib, SafeCast} from "src/FluxManager.sol";
 import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
 import {TickMath} from "@uni-v3-c/libraries/TickMath.sol";
 import {IPositionManager} from "@uni-v4-p/interfaces/IPositionManager.sol";
 import {Actions} from "@uni-v4-p/libraries/Actions.sol";
 import {ERC20} from "@solmate/src/tokens/ERC20.sol";
+import {FullMath} from "@uni-v4-c/libraries/FullMath.sol";
+
 import {console} from "@forge-std/Test.sol";
 
 contract UniswapV4FluxManager is FluxManager {
@@ -39,8 +41,9 @@ contract UniswapV4FluxManager is FluxManager {
     /*                        CONSTANTS                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    uint256 internal constant PRECISION = 1e9;
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+    int24 internal constant MIN_TICK = -887_270;
+    int24 internal constant MAX_TICK = 887_270;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STATE                              */
@@ -53,14 +56,29 @@ contract UniswapV4FluxManager is FluxManager {
     PositionData[] internal trackedPositionData;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                         ERRORS                             */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    error UniswapV4FluxManager__PositionNotFound();
+    error UniswapV4FluxManager__BadOptimal();
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       IMMUTABLES                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     IPositionManager internal immutable positionManager;
 
-    constructor(address _owner, address _boringVault, address _token0, address _token1, address _positionManager)
-        FluxManager(_owner, _boringVault, _token0, _token1)
-    {
+    constructor(
+        address _owner,
+        address _boringVault,
+        address _token0,
+        address _token1,
+        address _positionManager,
+        bool _baseIn0Or1,
+        address _datum,
+        uint16 _datumLowerBound,
+        uint16 _datumUpperBound
+    ) FluxManager(_owner, _boringVault, _token0, _token1, _baseIn0Or1, _datum, _datumLowerBound, _datumUpperBound) {
         positionManager = IPositionManager(_positionManager);
         bytes memory approveData = abi.encodeWithSelector(ERC20.approve.selector, PERMIT2, type(uint256).max);
         if (_token0 != address(0)) boringVault.manage(_token0, approveData, 0);
@@ -82,16 +100,80 @@ contract UniswapV4FluxManager is FluxManager {
     /*                     FLUX FUNCTIONS                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    // TODO isnt the optimal something like, look at the current tick compared to the min and max. Covnert to some percent 0 -> 100
+    // Then find totalAssets in 1 asset, and multiply by this percent, this is the split you should seek.
+    function calculatePerformanceRelativeToFlux(
+        uint256 exchangeRate,
+        uint256 optimalToken0Balance,
+        uint256 optimalToken1Balance
+    ) external override requiresAuth checkDatum(exchangeRate) {
+        if (performanceMetric != PerformanceMetric.FLUX) revert FluxManager__WrongMetric();
+
+        (uint256 token0Accumulated, uint256 token1Accumulated) = _totalAssets(exchangeRate);
+        if (optimalToken0Balance > token0Accumulated) {
+            if (optimalToken1Balance > token1Accumulated) revert UniswapV4FluxManager__BadOptimal();
+            // We are inferring a swap of token1 for token0 using exchange rate provided.
+            uint256 delta = token1Accumulated - optimalToken1Balance;
+            // Convert Delta to token0 using exchange rate.
+            uint256 converted = delta.mulDivDown(10 ** decimals1, exchangeRate);
+            // Make sure that converted + token0Accumulated is >= optimalToken0Balance.
+            if (optimalToken0Balance > (converted + token0Accumulated)) revert UniswapV4FluxManager__BadOptimal();
+        } else if (optimalToken1Balance > token1Accumulated) {
+            // No need to check if optimalToken0Balance is greater than token0Accumulated bc that was just done.
+            // We are inferring a swap of token0 for token1 using exchange rate provided.
+            uint256 delta = token0Accumulated - optimalToken0Balance;
+            // Convert Delta to token1 using exchange rate.
+            uint256 converted = delta.mulDivDown(exchangeRate, 10 ** decimals1);
+            // Make sure that converted + token1Accumulated is >= optimalToken1Balance.
+            if (optimalToken1Balance > (converted + token1Accumulated)) revert UniswapV4FluxManager__BadOptimal();
+        } else {
+            // Accumulated is optimal enough.
+            optimalToken0Balance = token0Accumulated;
+            optimalToken1Balance = token1Accumulated;
+        }
+
+        // Calculate the current sqrtPrice.
+        uint256 ratioX192 = FullMath.mulDiv(exchangeRate, 2 ** 192, 10 ** decimals0);
+        uint160 sqrtPriceX96 = SafeCast.toUint160(_sqrt(ratioX192));
+
+        // Calculate wide range liquidity amounts using optimal.
+        uint128 accumulatedLiquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(MIN_TICK),
+            TickMath.getSqrtRatioAtTick(MAX_TICK),
+            optimalToken0Balance,
+            optimalToken1Balance
+        );
+
+        uint256 currentHighwatermark = highwatermark;
+        if (accumulatedLiquidity > currentHighwatermark) {
+            uint256 delta = accumulatedLiquidity - currentHighwatermark;
+            uint256 currentTotalSupply = boringVault.totalSupply();
+            uint256 totalSupply = currentTotalSupply;
+            // Use minimum
+            if (totalSupply > totalSupplyLastReview) {
+                totalSupply = totalSupplyLastReview;
+            }
+            uint256 performance = delta.mulDivDown(totalSupply, 10 ** decimalsBoring);
+            // Update pendingFee
+            pendingFee = SafeCast.toUint128(performance.mulDivDown(performanceFee, BPS_SCALE));
+            // Update highwatermark
+            highwatermark = SafeCast.toUint128(accumulatedLiquidity);
+            // Update totalSupplyLastReview
+            totalSupplyLastReview = SafeCast.toUint128(currentTotalSupply);
+        }
+    }
+
     /// @notice Refresh internal flux constants.
     /// @dev For Uniswap V4 this is token0 and token1 contract balances
     function _refreshInternalFluxAccounting() internal override {
-        // TODO safecast
         token0Balance = address(token0) == address(0)
-            ? uint128(address(boringVault).balance)
-            : uint128(token0.balanceOf(address(boringVault)));
-        token1Balance = uint128(token1.balanceOf(address(boringVault)));
+            ? SafeCast.toUint128(address(boringVault).balance)
+            : SafeCast.toUint128(token0.balanceOf(address(boringVault)));
+        token1Balance = SafeCast.toUint128(token1.balanceOf(address(boringVault)));
     }
 
+    /// @notice exchangeRate must be given in terms of token1 decimals, and it should be the amount of token1 per token0
     function _totalAssets(uint256 exchangeRate)
         internal
         view
@@ -102,19 +184,18 @@ contract UniswapV4FluxManager is FluxManager {
         token1Assets = token1Balance;
 
         // Calculate the current sqrtPrice.
-        uint256 ratioX192 = PRECISION.mulDivDown((10 ** decimals1) << 192, exchangeRate);
-        // TODO safecast
-        uint160 sqrtPriceX96 = uint160(_sqrt(ratioX192));
-        console.log("Calculated sqrtPriceX96", sqrtPriceX96);
+        uint256 ratioX192 = FullMath.mulDiv(exchangeRate, 2 ** 192, 10 ** decimals0);
+        uint160 sqrtPriceX96 = SafeCast.toUint160(_sqrt(ratioX192));
 
         // Iterate through tracked position data and aggregate token balances
         uint256 positionCount = trackedPositionData.length;
         for (uint256 i; i < positionCount; ++i) {
+            PositionData memory data = trackedPositionData[i];
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
                 sqrtPriceX96,
-                TickMath.getSqrtRatioAtTick(trackedPositionData[i].tickLower),
-                TickMath.getSqrtRatioAtTick(trackedPositionData[i].tickLower),
-                trackedPositionData[i].liquidity
+                TickMath.getSqrtRatioAtTick(data.tickLower),
+                TickMath.getSqrtRatioAtTick(data.tickUpper),
+                data.liquidity
             );
             token0Assets += amount0;
             token1Assets += amount1;
@@ -127,8 +208,8 @@ contract UniswapV4FluxManager is FluxManager {
 
     // TODO maybe make a rebalance function that lets strategists do multiple actions at once
     // TODO Add swapping support
-    // TODO should native pairs also be allowed to use WETH plus other asset? This is a bit weird cuz the order of token0 and 1 can change
 
+    // We always sweep becuase this logic does not attempt to account for value sitting unallocated in UniV4
     function mint(
         int24 tickLower,
         int24 tickUpper,
@@ -137,12 +218,16 @@ contract UniswapV4FluxManager is FluxManager {
         uint256 amount1Max,
         uint256 deadline
     ) external requiresAuth {
-        bytes memory actions = abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR));
-        bytes[] memory params = new bytes[](2);
+        bytes memory actions = abi.encodePacked(
+            uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR), uint8(Actions.SWEEP), uint8(Actions.SWEEP)
+        );
+        bytes[] memory params = new bytes[](4);
         PoolKey memory poolKey = PoolKey(address(token0), address(token1), 500, 10, address(0));
 
         params[0] = abi.encode(poolKey, tickLower, tickUpper, liquidity, amount0Max, amount1Max, boringVault, hex"");
         params[1] = abi.encode(token0, token1);
+        params[2] = abi.encode(token0, boringVault);
+        params[3] = abi.encode(token1, boringVault);
         uint256 positionId = positionManager.nextTokenId();
         _modifyLiquidities(actions, params, deadline, address(token0) == address(0) ? amount0Max : 0);
 
@@ -157,9 +242,10 @@ contract UniswapV4FluxManager is FluxManager {
         // Remove position from tracking if present.
         _removePositionIfPresent(positionId);
 
-        bytes memory actions = abi.encodePacked(Actions.BURN_POSITION);
-        bytes[] memory params = new bytes[](1);
+        bytes memory actions = abi.encodePacked(uint8(Actions.BURN_POSITION), uint8(Actions.TAKE_PAIR));
+        bytes[] memory params = new bytes[](2);
         params[0] = abi.encode(positionId, amount0Min, amount1Min, hex"");
+        params[1] = abi.encode(token0, token1, boringVault);
 
         _modifyLiquidities(actions, params, deadline, 0);
 
@@ -173,11 +259,15 @@ contract UniswapV4FluxManager is FluxManager {
         uint256 amount1Max,
         uint256 deadline
     ) external requiresAuth {
-        bytes memory actions = abi.encodePacked(uint8(Actions.INCREASE_LIQUIDITY), uint8(Actions.SETTLE_PAIR));
-        bytes[] memory params = new bytes[](2);
+        bytes memory actions = abi.encodePacked(
+            uint8(Actions.INCREASE_LIQUIDITY), uint8(Actions.SETTLE_PAIR), uint8(Actions.SWEEP), uint8(Actions.SWEEP)
+        );
+        bytes[] memory params = new bytes[](4);
 
         params[0] = abi.encode(positionId, liquidity, amount0Max, amount1Max, hex"");
         params[1] = abi.encode(token0, token1);
+        params[2] = abi.encode(token0, boringVault);
+        params[3] = abi.encode(token1, boringVault);
 
         _modifyLiquidities(actions, params, deadline, address(token0) == address(0) ? amount0Max : 0);
 
@@ -243,7 +333,7 @@ contract UniswapV4FluxManager is FluxManager {
         if (positionIndex != type(uint256).max) {
             trackedPositionData[positionIndex].liquidity += liquidity;
         } else {
-            revert("Sad");
+            revert UniswapV4FluxManager__PositionNotFound();
         }
     }
 
@@ -260,7 +350,7 @@ contract UniswapV4FluxManager is FluxManager {
         if (positionIndex != type(uint256).max) {
             trackedPositionData[positionIndex].liquidity -= liquidity;
         } else {
-            revert("Sad");
+            revert UniswapV4FluxManager__PositionNotFound();
         }
     }
 
