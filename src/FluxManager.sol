@@ -7,6 +7,7 @@ import {FixedPointMathLib} from "@solmate/src/utils/FixedPointMathLib.sol";
 import {ERC20} from "@solmate/src/tokens/ERC20.sol";
 import {IDatum} from "src/interfaces/IDatum.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {WETH} from "@solmate/src/tokens/WETH.sol";
 
 /// @notice Manager used for Flux Boring Vaults
 ///
@@ -23,11 +24,11 @@ abstract contract FluxManager is Auth {
     /// @notice Performance metrics used to measure vault performance
     /// @param TOKEN0 Measures accumulation of token0
     /// @param TOKEN1 Measures accumulation of token1
-    /// @param FLUX Measures accumulation of wide range liquidity
+    /// @param LIQUIDITY Measures accumulation of wide range liquidity
     enum PerformanceMetric {
         TOKEN0,
         TOKEN1,
-        FLUX
+        LIQUIDITY
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -50,10 +51,11 @@ abstract contract FluxManager is Auth {
     uint16 public datumLowerBound;
     uint16 public datumUpperBound;
 
-    // TODO I think its okay to allow people to change their performance metric, as long as fees are paid, and highwatermark is reset.
     PerformanceMetric public performanceMetric;
     uint16 public performanceFee;
-    uint128 highwatermark;
+    uint64 public lastPerformanceReview;
+    uint64 public performanceReviewFrequency;
+    uint128 highWatermark;
     address public payout;
     uint128 pendingFee;
     uint128 totalSupplyLastReview;
@@ -66,6 +68,7 @@ abstract contract FluxManager is Auth {
     error FluxManager__InvalidExchangeRate(uint256 provided);
     error FluxManager__WrongMetric();
     error FluxManager__NotImplemented();
+    error FluxManager__TooSoon();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         EVENTS                             */
@@ -78,11 +81,8 @@ abstract contract FluxManager is Auth {
     /*                       MODIFIERS                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    // TODO if this error happened in the datum then we could provide the exchange rate, lower and upper
     modifier checkDatum(uint256 exchangeRate) {
-        if (!datum.validateExchangeRateWithDatum(exchangeRate, decimals1, datumLowerBound, datumUpperBound)) {
-            revert FluxManager__InvalidExchangeRate(exchangeRate);
-        }
+        datum.validateExchangeRateWithDatum(exchangeRate, decimals1, datumLowerBound, datumUpperBound);
         _;
     }
 
@@ -97,6 +97,7 @@ abstract contract FluxManager is Auth {
     uint8 internal immutable decimals1;
     uint8 internal immutable decimalsBoring;
     bool internal immutable baseIn0Or1;
+    address internal immutable nativeWrapper;
 
     constructor(
         address _owner,
@@ -104,6 +105,7 @@ abstract contract FluxManager is Auth {
         address _token0,
         address _token1,
         bool _baseIn0Or1,
+        address _nativeWrapper,
         address _datum,
         uint16 _datumLowerBound,
         uint16 _datumUpperBound
@@ -115,10 +117,13 @@ abstract contract FluxManager is Auth {
         decimals1 = token1.decimals();
         decimalsBoring = boringVault.decimals();
         baseIn0Or1 = _baseIn0Or1;
+        nativeWrapper = _nativeWrapper;
         datum = IDatum(_datum);
         // TODO validate these
         datumLowerBound = _datumLowerBound;
         datumUpperBound = _datumUpperBound;
+
+        performanceFee = 0.2e4;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -147,57 +152,74 @@ abstract contract FluxManager is Auth {
         _refreshInternalFluxAccounting();
     }
 
-    // TODO performance fee calculation
-    // 3 options share price relative to
-    // 1) token0
-    // 2) token1
-    // 3) flux, liquidity of max range position, think this needs to be a virtual function that things can optionally implement
-
-    // TODO can this be abstracted to a pending fee function
-    /// @dev datum checked via getRateSafe call
-    /// @dev pending fee is not incorporated into new highwatermark or into totalAssets, to reduce complexity
+    /// @dev pending fee is not incorporated into new highWatermark or into totalAssets, to reduce complexity
     // It can be safely assumed that fees will regularly be taken
-    function calculatePerformanceRelativeToTokens(uint256 exchangeRate) external requiresAuth {
-        if (performanceMetric != PerformanceMetric.TOKEN0 || performanceMetric != PerformanceMetric.TOKEN1) {
-            revert FluxManager__WrongMetric();
-        }
+    function reviewPerformance() external requiresAuth {
+        // Make sure we are not paused.
+        if (isPaused) revert FluxManager__Paused();
 
-        uint256 accumulatedPerShare;
-        if (performanceMetric == PerformanceMetric.TOKEN0) {
-            accumulatedPerShare = getRateSafe(exchangeRate, true);
-        } else {
-            accumulatedPerShare = getRateSafe(exchangeRate, false);
-        }
+        // Make sure enough time has passed.
+        uint256 currentTime = block.timestamp;
+        uint256 timeDelta = currentTime - lastPerformanceReview;
+        if (timeDelta < performanceReviewFrequency) revert FluxManager__TooSoon();
 
-        uint256 currentHighwatermark = highwatermark;
-        if (accumulatedPerShare > currentHighwatermark) {
-            uint256 delta = accumulatedPerShare - currentHighwatermark;
-            uint256 currentTotalSupply = boringVault.totalSupply();
-            uint256 totalSupply = currentTotalSupply;
-            // Use minimum
-            if (totalSupply > totalSupplyLastReview) {
-                totalSupply = totalSupplyLastReview;
-            }
-            uint256 performance = delta.mulDivDown(totalSupply, 10 ** decimalsBoring);
+        (uint256 accumulatedPerShare, uint256 currentHighWatermark, uint256 currentTotalSupply, uint256 feeOwed) =
+            previewPerformance();
+
+        if (accumulatedPerShare > currentHighWatermark) {
+            // Update highWatermark
+            highWatermark = SafeCast.toUint128(accumulatedPerShare);
+        }
+        if (feeOwed > 0) {
             // Update pendingFee
-            pendingFee = SafeCast.toUint128(performance.mulDivDown(performanceFee, BPS_SCALE));
-            // Update highwatermark
-            highwatermark = SafeCast.toUint128(accumulatedPerShare);
-            // Update totalSupplyLastReview
-            totalSupplyLastReview = SafeCast.toUint128(currentTotalSupply);
+            pendingFee += SafeCast.toUint128(feeOwed);
         }
+        // Update totalSupplyLastReview
+        totalSupplyLastReview = SafeCast.toUint128(currentTotalSupply);
+        // Update lastPerformanceReview
+        lastPerformanceReview = uint64(currentTime);
     }
 
-    function calculatePerformanceRelativeToFlux(
-        uint256 exchangeRate,
-        uint256, /*optimalToken0Balance*/
-        uint256 /*optimalToken1Balance*/
-    ) external virtual requiresAuth checkDatum(exchangeRate) {
-        revert FluxManager__NotImplemented();
+    function resetHighWatermark() external requiresAuth {
+        _resetHighWatermark();
     }
+
+    function claimFees(bool token0Or1) external requiresAuth {
+        _claimFees(token0Or1);
+    }
+
+    /// @dev if there are pending fees this will forfeit them.
+    function switchPerformanceMetric(PerformanceMetric newMetric, bool token0Or1) external requiresAuth {
+        _claimFees(token0Or1);
+        performanceMetric = newMetric;
+        _resetHighWatermark();
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       FLUX VIEW                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function previewPerformance()
+        public
+        view
+        returns (uint256 accumulatedPerShare, uint256 currentHighWatermark, uint256 currentTotalSupply, uint256 feeOwed)
+    {
+        (accumulatedPerShare, currentTotalSupply) = _getAccumulatedPerShareBasedOffMetric();
+
+        currentHighWatermark = highWatermark;
+        if (accumulatedPerShare > currentHighWatermark) {
+            if (performanceFee > 0) {
+                uint256 delta = accumulatedPerShare - currentHighWatermark;
+                // Use minimum
+                uint256 minShares =
+                    currentTotalSupply > totalSupplyLastReview ? totalSupplyLastReview : currentTotalSupply;
+
+                uint256 performance = delta.mulDivDown(minShares, 10 ** decimalsBoring);
+                // Update pendingFee
+                feeOwed = SafeCast.toUint128(performance.mulDivDown(performanceFee, BPS_SCALE));
+            }
+        }
+    }
 
     // ExchangeRate provided in terms of token1 decimals
     function totalAssets(uint256 exchangeRate, bool quoteIn0Or1)
@@ -278,6 +300,88 @@ abstract contract FluxManager is Auth {
     {
         if (isPaused) revert FluxManager__Paused();
         return shareComposition(exchangeRate);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     FLUX INTERNAL                          */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function _getAccumulatedPerShareBasedOffMetric()
+        internal
+        view
+        returns (uint256 accumulatedPerShare, uint256 currentTotalSupply)
+    {
+        uint256 accumulated;
+        uint256 exchangeRate = datum.getDatumInDecimals(decimals1);
+        if (performanceMetric == PerformanceMetric.TOKEN0) {
+            accumulated = totalAssets(exchangeRate, true);
+        } else if (performanceMetric == PerformanceMetric.TOKEN1) {
+            accumulated = totalAssets(exchangeRate, false);
+        } else if (performanceMetric == PerformanceMetric.LIQUIDITY) {
+            accumulated = _totalLiquidity(exchangeRate);
+        }
+
+        currentTotalSupply = boringVault.totalSupply();
+        accumulatedPerShare = accumulated.mulDivDown(10 ** decimalsBoring, currentTotalSupply);
+    }
+
+    function _totalLiquidity(uint256 /*exchangeRate*/ ) internal view virtual returns (uint256 /*accumulated*/ ) {
+        revert FluxManager__NotImplemented();
+    }
+
+    function _convertLiquidityToToken(uint256, /*exchangeRate*/ uint128, /*liquidity*/ bool /*token0Or1*/ )
+        internal
+        virtual
+        returns (uint256 /*amount*/ )
+    {
+        revert FluxManager__NotImplemented();
+    }
+
+    function _resetHighWatermark() internal {
+        (uint256 accumulatedPerShare, uint256 currentTotalSupply) = _getAccumulatedPerShareBasedOffMetric();
+
+        highWatermark = SafeCast.toUint128(accumulatedPerShare);
+        totalSupplyLastReview = SafeCast.toUint128(currentTotalSupply);
+        lastPerformanceReview = uint64(block.timestamp);
+    }
+
+    function _claimFees(bool token0Or1) internal {
+        uint256 pending = pendingFee;
+        if (pending > 0) {
+            uint256 exchangeRate = datum.getDatumInDecimals(decimals1);
+            address token;
+            uint256 amount;
+            if (token0Or1) {
+                token = address(token0);
+                if (performanceMetric == PerformanceMetric.TOKEN0) {
+                    amount = pending;
+                } else if (performanceMetric == PerformanceMetric.TOKEN1) {
+                    amount = pending.mulDivDown(10 ** decimals0, exchangeRate);
+                } else if (performanceMetric == PerformanceMetric.LIQUIDITY) {
+                    amount = _convertLiquidityToToken(exchangeRate, uint128(pending), token0Or1);
+                }
+            } else {
+                token = address(token1);
+                if (performanceMetric == PerformanceMetric.TOKEN0) {
+                    amount = pending.mulDivDown(exchangeRate, 10 ** decimals0);
+                } else if (performanceMetric == PerformanceMetric.TOKEN1) {
+                    amount = pending;
+                } else if (performanceMetric == PerformanceMetric.LIQUIDITY) {
+                    amount = _convertLiquidityToToken(exchangeRate, uint128(pending), token0Or1);
+                }
+            }
+
+            pendingFee = 0;
+            if (address(token) == address(0)) {
+                // Wrap it.
+                boringVault.manage(nativeWrapper, abi.encodeWithSelector(WETH.deposit.selector), amount);
+                // Transfer it.
+                boringVault.manage(nativeWrapper, abi.encodeWithSelector(ERC20.transfer.selector, payout, amount), 0);
+            } else {
+                // Transfer it.
+                boringVault.manage(token, abi.encodeWithSelector(ERC20.transfer.selector, payout, amount), 0);
+            }
+        }
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

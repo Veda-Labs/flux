@@ -20,6 +20,7 @@ contract ChainlinkDatum is IDatum {
 
     error ChainlinkDatum__NegativeAnswer();
     error ChainlinkDatum__StaleAnswer();
+    error ChainlinkDatum__InvalidExchangeRate(uint256 provided, uint256 lower, uint256 upper);
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       IMMUTABLES                           */
@@ -52,12 +53,22 @@ contract ChainlinkDatum is IDatum {
         }
     }
 
+    function getDatumInDecimals(uint8 requestedDecimals) external view returns (uint256) {
+        uint256 datum = getDatum();
+
+        if (decimals != requestedDecimals) {
+            return datum.mulDivDown(10 ** requestedDecimals, 10 ** decimals);
+        } else {
+            return datum;
+        }
+    }
+
     function validateExchangeRateWithDatum(
         uint256 exchangeRate,
         uint8 exchangeRateDecimals,
         uint16 lowerBound,
         uint16 upperBound
-    ) external view returns (bool) {
+    ) external view {
         uint256 datum = getDatum();
         uint256 lower = datum.mulDivDown(lowerBound, BPS_SCALE);
         uint256 upper = datum.mulDivDown(upperBound, BPS_SCALE);
@@ -67,7 +78,8 @@ contract ChainlinkDatum is IDatum {
             exchangeRate = exchangeRate.mulDivDown(10 ** decimals, 10 ** exchangeRateDecimals);
         }
 
-        if (exchangeRate >= lower && exchangeRate <= upper) return true;
-        else return false;
+        if (exchangeRate < lower || exchangeRate > upper) {
+            revert ChainlinkDatum__InvalidExchangeRate(exchangeRate, lower, upper);
+        }
     }
 }

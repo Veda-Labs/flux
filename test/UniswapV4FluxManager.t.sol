@@ -3,7 +3,7 @@ pragma solidity 0.8.24;
 
 import {Auth, Authority} from "@solmate/src/auth/Auth.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {UniswapV4FluxManager} from "src/managers/UniswapV4FluxManager.sol";
+import {UniswapV4FluxManager, FluxManager} from "src/managers/UniswapV4FluxManager.sol";
 import {BoringVault} from "src/BoringVault.sol";
 import {ERC20} from "@solmate/src/tokens/ERC20.sol";
 import {RolesAuthority, Authority} from "@solmate/src/auth/authorities/RolesAuthority.sol";
@@ -24,6 +24,7 @@ contract BoringDroneTest is Test {
     address internal positionManager = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
     ERC20 internal token0 = ERC20(address(0));
     ERC20 internal token1 = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+    address internal nativeWrapper = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     IPoolManager internal poolManager = IPoolManager(0x000000000004444c5dc75cB358380D2e3dE08A90);
     PoolId internal eth_usdc_pool_id = PoolId.wrap(0x21c67e77068de97969ba93d4aab21826d33ca12bb9f565d8496e8fda8a82ca27);
     address internal ETH_USD_ORACLE = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
@@ -54,17 +55,20 @@ contract BoringDroneTest is Test {
             address(boringVault),
             address(token0),
             address(token1),
-            positionManager,
             true,
+            nativeWrapper,
             address(datum),
             0.995e4,
-            1.005e4
+            1.005e4,
+            positionManager
         );
     }
 
     function testMinting() external {
-        uint256 ethAmount = 3e18;
-        uint256 usdcAmount = 10_000e6;
+        // uint256 ethAmount = 3e18;
+        // uint256 usdcAmount = 10_000e6;
+        uint256 ethAmount = 3384967315990850674;
+        uint256 usdcAmount = 8979053538;
         deal(address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
@@ -89,6 +93,8 @@ contract BoringDroneTest is Test {
             usdcAmount
         );
 
+        console.log("Liquidity minting", liquidity);
+
         // current tick for uniswap V3 pool 68456
         manager.mint(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
 
@@ -101,6 +107,9 @@ contract BoringDroneTest is Test {
 
         console.log("Total Assets in Token0: ", totalAssetsInToken0);
         console.log("Total Assets in Token1: ", totalAssetsInToken1);
+
+        console.log("ETH Balance: ", address(boringVault).balance);
+        console.log("USDC Balance: ", token1.balanceOf(address(boringVault)));
     }
 
     function testGetRate() external {
@@ -110,6 +119,56 @@ contract BoringDroneTest is Test {
         assertEq(rateIn0, 1e18, "Zero share rate should be 1");
         uint256 rateIn1 = manager.getRate(exchangeRate, false);
         assertEq(rateIn1, exchangeRate, "Zero share rate should be exchange rate");
+    }
+
+    function testPerformanceReview() external {
+        // Mint some shares so we can reviewPerformance
+        boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
+        uint256 ethAmount = 0;
+        uint256 usdcAmount = 50_000e6;
+        deal(address(boringVault), ethAmount);
+        deal(address(token1), address(boringVault), usdcAmount);
+
+        manager.refreshInternalFluxAccounting();
+
+        uint256 exchangeRate = 2_652.626362e6;
+
+        manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN1, true);
+
+        (uint256 accumulatedPerShare, uint256 currentHighWatermark, uint256 currentTotalSupply, uint256 feeOwed) =
+            manager.previewPerformance();
+
+        console.log("Initial Accumulated Per Share: ", accumulatedPerShare);
+        console.log("Initial Current High Watermark: ", currentHighWatermark);
+        console.log("Initial Current Total Supply: ", currentTotalSupply);
+        console.log("Initial Fee Owed: ", feeOwed);
+
+        manager.reviewPerformance();
+
+        deal(address(token1), address(boringVault), 100_000e6);
+
+        manager.refreshInternalFluxAccounting();
+
+        (accumulatedPerShare, currentHighWatermark, currentTotalSupply, feeOwed) = manager.previewPerformance();
+
+        console.log("Post-Mint Accumulated Per Share: ", accumulatedPerShare);
+        console.log("Post-Mint Current High Watermark: ", currentHighWatermark);
+        console.log("Post-Mint Current Total Supply: ", currentTotalSupply);
+        console.log("Post-Mint Fee Owed: ", feeOwed);
+
+        // int24 tickLower = -887_270;
+        // int24 tickUpper = 887_270;
+        // (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
+
+        // (uint256 scaledOptimal0, uint256 scaledOptimal1) = LiquidityAmounts.getAmountsForLiquidity(
+        //     sqrtPriceX96,
+        //     TickMath.getSqrtRatioAtTick(tickLower),
+        //     TickMath.getSqrtRatioAtTick(tickUpper),
+        //     174338185018348
+        // );
+
+        // console.log("Perfect 0: ", scaledOptimal0);
+        // console.log("Perfect 1: ", scaledOptimal1);
     }
 
     // ========================================= HELPER FUNCTIONS =========================================

@@ -44,6 +44,8 @@ contract UniswapV4FluxManager is FluxManager {
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     int24 internal constant MIN_TICK = -887_270;
     int24 internal constant MAX_TICK = 887_270;
+    uint128 internal constant BASE_LIQUIDITY = 1_000_000_000;
+    uint256 internal constant LIQUIDITY_SCALAR_MULTIPLIER = 1e18;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STATE                              */
@@ -73,12 +75,25 @@ contract UniswapV4FluxManager is FluxManager {
         address _boringVault,
         address _token0,
         address _token1,
-        address _positionManager,
         bool _baseIn0Or1,
+        address _nativeWrapper,
         address _datum,
         uint16 _datumLowerBound,
-        uint16 _datumUpperBound
-    ) FluxManager(_owner, _boringVault, _token0, _token1, _baseIn0Or1, _datum, _datumLowerBound, _datumUpperBound) {
+        uint16 _datumUpperBound,
+        address _positionManager
+    )
+        FluxManager(
+            _owner,
+            _boringVault,
+            _token0,
+            _token1,
+            _baseIn0Or1,
+            _nativeWrapper,
+            _datum,
+            _datumLowerBound,
+            _datumUpperBound
+        )
+    {
         positionManager = IPositionManager(_positionManager);
         bytes memory approveData = abi.encodeWithSelector(ERC20.approve.selector, PERMIT2, type(uint256).max);
         if (_token0 != address(0)) boringVault.manage(_token0, approveData, 0);
@@ -100,67 +115,61 @@ contract UniswapV4FluxManager is FluxManager {
     /*                     FLUX FUNCTIONS                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    // TODO isnt the optimal something like, look at the current tick compared to the min and max. Covnert to some percent 0 -> 100
-    // Then find totalAssets in 1 asset, and multiply by this percent, this is the split you should seek.
-    function calculatePerformanceRelativeToFlux(
-        uint256 exchangeRate,
-        uint256 optimalToken0Balance,
-        uint256 optimalToken1Balance
-    ) external override requiresAuth checkDatum(exchangeRate) {
-        if (performanceMetric != PerformanceMetric.FLUX) revert FluxManager__WrongMetric();
-
-        (uint256 token0Accumulated, uint256 token1Accumulated) = _totalAssets(exchangeRate);
-        if (optimalToken0Balance > token0Accumulated) {
-            if (optimalToken1Balance > token1Accumulated) revert UniswapV4FluxManager__BadOptimal();
-            // We are inferring a swap of token1 for token0 using exchange rate provided.
-            uint256 delta = token1Accumulated - optimalToken1Balance;
-            // Convert Delta to token0 using exchange rate.
-            uint256 converted = delta.mulDivDown(10 ** decimals1, exchangeRate);
-            // Make sure that converted + token0Accumulated is >= optimalToken0Balance.
-            if (optimalToken0Balance > (converted + token0Accumulated)) revert UniswapV4FluxManager__BadOptimal();
-        } else if (optimalToken1Balance > token1Accumulated) {
-            // No need to check if optimalToken0Balance is greater than token0Accumulated bc that was just done.
-            // We are inferring a swap of token0 for token1 using exchange rate provided.
-            uint256 delta = token0Accumulated - optimalToken0Balance;
-            // Convert Delta to token1 using exchange rate.
-            uint256 converted = delta.mulDivDown(exchangeRate, 10 ** decimals1);
-            // Make sure that converted + token1Accumulated is >= optimalToken1Balance.
-            if (optimalToken1Balance > (converted + token1Accumulated)) revert UniswapV4FluxManager__BadOptimal();
-        } else {
-            // Accumulated is optimal enough.
-            optimalToken0Balance = token0Accumulated;
-            optimalToken1Balance = token1Accumulated;
-        }
-
+    /// @notice Calculates the accumulated liquidity of a wide range UniswapV4 position using given exchange rate.
+    /// @dev This function determines the liquidity scalar `liquidityScalar` based on the available token balances
+    ///      and the optimal token balances for a max range Uniswap V4 position. The calculation is based on the following system of equations:
+    ///      - currentToken0Balance - token0SwapAmount = scaledToken0Balance * liquidityScalar
+    ///      - currentToken1Balance + token0SwapAmount * exchangeRate = scaledToken1Balance * liquidityScalar
+    ///      Solving these equations gives:
+    ///      - liquidityScalar = (currentToken0Balance * exchangeRate + currentToken1Balance) / (scaledToken1Balance + scaledToken0Balance * exchangeRate)
+    ///      The reverse case, where token0 is the limiting factor, was also checked, and the resulting liquidityScalar equation was the same.
+    /// @param exchangeRate The price of token1 per token0, given in terms of token1 decimals.
+    /// @custom:variable currentToken0Balance Token 0 balance, represented by `t0B`.
+    /// @custom:variable token0SwapAmount The amount of token 0 that must be swapped, unknown.
+    /// @custom:variable liquidityScalar The liquidity scalar, represented by `liquidityScalar`.
+    /// @custom:variable currentToken1Balance Token 1 balance, represented by `t1B`.
+    /// @custom:variable exchangeRate The exchange rate, represented by `exchangeRate`.
+    /// @custom:variable scaledToken0Balance Optimal token 0 balance for optimal liquidity, represented by `scaledToken0Balance`.
+    /// @custom:variable scaledToken1Balance Optimal token 1 balance for optimal liquidity, represented by `scaledToken1Balance`.
+    function _totalLiquidity(uint256 exchangeRate) internal view override returns (uint256 accumulated) {
         // Calculate the current sqrtPrice.
         uint256 ratioX192 = FullMath.mulDiv(exchangeRate, 2 ** 192, 10 ** decimals0);
         uint160 sqrtPriceX96 = SafeCast.toUint160(_sqrt(ratioX192));
 
-        // Calculate wide range liquidity amounts using optimal.
-        uint128 accumulatedLiquidity = LiquidityAmounts.getLiquidityForAmounts(
-            sqrtPriceX96,
-            TickMath.getSqrtRatioAtTick(MIN_TICK),
-            TickMath.getSqrtRatioAtTick(MAX_TICK),
-            optimalToken0Balance,
-            optimalToken1Balance
+        (uint256 scaledToken0Balance, uint256 scaledToken1Balance) = LiquidityAmounts.getAmountsForLiquidity(
+            sqrtPriceX96, TickMath.getSqrtRatioAtTick(MIN_TICK), TickMath.getSqrtRatioAtTick(MAX_TICK), BASE_LIQUIDITY
         );
 
-        uint256 currentHighwatermark = highwatermark;
-        if (accumulatedLiquidity > currentHighwatermark) {
-            uint256 delta = accumulatedLiquidity - currentHighwatermark;
-            uint256 currentTotalSupply = boringVault.totalSupply();
-            uint256 totalSupply = currentTotalSupply;
-            // Use minimum
-            if (totalSupply > totalSupplyLastReview) {
-                totalSupply = totalSupplyLastReview;
-            }
-            uint256 performance = delta.mulDivDown(totalSupply, 10 ** decimalsBoring);
-            // Update pendingFee
-            pendingFee = SafeCast.toUint128(performance.mulDivDown(performanceFee, BPS_SCALE));
-            // Update highwatermark
-            highwatermark = SafeCast.toUint128(accumulatedLiquidity);
-            // Update totalSupplyLastReview
-            totalSupplyLastReview = SafeCast.toUint128(currentTotalSupply);
+        (uint256 t0B, uint256 t1B) = _totalAssets(exchangeRate);
+
+        // The math has spoken and it actually does not matter if token0 or token1 is limiting the resulting
+        // liquidity scalar equation is the same, so no need to check what is limiting.
+        uint256 liquidityScalarNumerator = t0B.mulDivDown(exchangeRate, 10 ** decimals0) + t1B;
+        uint256 liquidityScalarDenominator =
+            scaledToken0Balance.mulDivDown(exchangeRate, 10 ** decimals0) + scaledToken1Balance;
+        // accumulatedLiquidity = numerator * BASE_LIQUIDITY / denominator
+        accumulated = liquidityScalarNumerator.mulDivDown(BASE_LIQUIDITY, liquidityScalarDenominator);
+    }
+
+    function _convertLiquidityToToken(uint256 exchangeRate, uint128 liquidity, bool token0Or1)
+        internal
+        view
+        override
+        returns (uint256 amount)
+    {
+        // Calculate the current sqrtPrice.
+        uint256 ratioX192 = FullMath.mulDiv(exchangeRate, 2 ** 192, 10 ** decimals0);
+        uint160 sqrtPriceX96 = SafeCast.toUint160(_sqrt(ratioX192));
+
+        (uint256 t0B, uint256 t1B) = LiquidityAmounts.getAmountsForLiquidity(
+            sqrtPriceX96, TickMath.getSqrtRatioAtTick(MIN_TICK), TickMath.getSqrtRatioAtTick(MAX_TICK), liquidity
+        );
+
+        // Convert into 1 token.
+        if (token0Or1) {
+            amount = t0B + t1B.mulDivDown(10 ** decimals0, exchangeRate);
+        } else {
+            amount = t1B + t0B.mulDivDown(exchangeRate, 10 ** decimals0);
         }
     }
 
