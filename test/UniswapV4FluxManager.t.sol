@@ -96,7 +96,10 @@ contract BoringDroneTest is Test {
         console.log("Liquidity minting", liquidity);
 
         // current tick for uniswap V3 pool 68456
-        manager.mint(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
+        UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
+        actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
+        manager.rebalance(price, actions);
 
         (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
         assertApproxEqRel(token0Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
@@ -131,7 +134,7 @@ contract BoringDroneTest is Test {
 
         manager.refreshInternalFluxAccounting();
 
-        uint256 exchangeRate = 2_652.626362e6;
+        uint256 exchangeRate = 3_652.626362e6;
 
         manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN1, true);
 
@@ -156,19 +159,7 @@ contract BoringDroneTest is Test {
         console.log("Post-Mint Current Total Supply: ", currentTotalSupply);
         console.log("Post-Mint Fee Owed: ", feeOwed);
 
-        // int24 tickLower = -887_270;
-        // int24 tickUpper = 887_270;
-        // (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
-
-        // (uint256 scaledOptimal0, uint256 scaledOptimal1) = LiquidityAmounts.getAmountsForLiquidity(
-        //     sqrtPriceX96,
-        //     TickMath.getSqrtRatioAtTick(tickLower),
-        //     TickMath.getSqrtRatioAtTick(tickUpper),
-        //     174338185018348
-        // );
-
-        // console.log("Perfect 0: ", scaledOptimal0);
-        // console.log("Perfect 1: ", scaledOptimal1);
+        manager.reviewPerformance();
     }
 
     // ========================================= HELPER FUNCTIONS =========================================

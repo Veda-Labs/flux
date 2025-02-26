@@ -15,8 +15,25 @@ contract UniswapV4FluxManager is FluxManager {
     using FixedPointMathLib for uint256;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                         ENUMS                              */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    enum ActionKind {
+        MINT,
+        BURN,
+        INCREASE_LIQUIDITY,
+        DECREASE_LIQUIDITY,
+        COLLECT_FEES
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STRUCT                             */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    struct Action {
+        ActionKind kind;
+        bytes data;
+    }
 
     struct PoolKey {
         /// @notice The lower currency of the pool, sorted numerically
@@ -45,11 +62,14 @@ contract UniswapV4FluxManager is FluxManager {
     int24 internal constant MIN_TICK = -887_270;
     int24 internal constant MAX_TICK = 887_270;
     uint128 internal constant BASE_LIQUIDITY = 1_000_000_000;
-    uint256 internal constant LIQUIDITY_SCALAR_MULTIPLIER = 1e18;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STATE                              */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    uint16 public rebalanceDeviationMin = 0.99e4;
+    uint16 public rebalanceDeviationMax = 1.01e4;
+
     uint128 internal token0Balance;
     uint128 internal token1Balance;
 
@@ -62,7 +82,7 @@ contract UniswapV4FluxManager is FluxManager {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     error UniswapV4FluxManager__PositionNotFound();
-    error UniswapV4FluxManager__BadOptimal();
+    error UniswapV4FluxManager__RebalanceDeviation(uint256 result, uint256 min, uint256 max);
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       IMMUTABLES                           */
@@ -215,18 +235,66 @@ contract UniswapV4FluxManager is FluxManager {
     /*                  STRATEGIST FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    // TODO maybe make a rebalance function that lets strategists do multiple actions at once
     // TODO Add swapping support
+    // UniV4 swapping support
+    // TODO 1inch support
+
+    function rebalance(uint256 exchangeRate, Action[] calldata actions)
+        external
+        checkDatum(exchangeRate)
+        requiresAuth
+    {
+        uint256 totalAssetsInToken0Before = totalAssets(exchangeRate, true);
+        for (uint256 i; i < actions.length; ++i) {
+            Action calldata action = actions[i];
+            if (action.kind == ActionKind.MINT) {
+                (
+                    int24 tickLower,
+                    int24 tickUpper,
+                    uint128 liquidity,
+                    uint256 amount0Max,
+                    uint256 amount1Max,
+                    uint256 deadline
+                ) = abi.decode(action.data, (int24, int24, uint128, uint256, uint256, uint256));
+                _mint(tickLower, tickUpper, liquidity, amount0Max, amount1Max, deadline);
+            } else if (action.kind == ActionKind.BURN) {
+                (uint256 positionId, uint256 amount0Min, uint256 amount1Min, uint256 deadline) =
+                    abi.decode(action.data, (uint256, uint256, uint256, uint256));
+                _burn(positionId, amount0Min, amount1Min, deadline);
+            } else if (action.kind == ActionKind.INCREASE_LIQUIDITY) {
+                (uint256 positionId, uint128 liquidity, uint256 amount0Max, uint256 amount1Max, uint256 deadline) =
+                    abi.decode(action.data, (uint256, uint128, uint256, uint256, uint256));
+                _increaseLiquidity(positionId, liquidity, amount0Max, amount1Max, deadline);
+            } else if (action.kind == ActionKind.DECREASE_LIQUIDITY) {
+                (uint256 positionId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) =
+                    abi.decode(action.data, (uint256, uint128, uint256, uint256, uint256));
+                _decreaseLiquidity(positionId, liquidity, amount0Min, amount1Min, deadline);
+            } else if (action.kind == ActionKind.COLLECT_FEES) {
+                (uint256 positionId, uint256 deadline) = abi.decode(action.data, (uint256, uint256));
+                _collectFees(positionId, deadline);
+            }
+        }
+
+        _refreshInternalFluxAccounting();
+
+        // Check rebalance deviation
+        uint256 totalAssetsInToken0After = totalAssets(exchangeRate, true);
+        uint256 minAssets = totalAssetsInToken0Before.mulDivDown(rebalanceDeviationMin, BPS_SCALE);
+        uint256 maxAssets = totalAssetsInToken0Before.mulDivDown(rebalanceDeviationMax, BPS_SCALE);
+        if (totalAssetsInToken0After < minAssets || totalAssetsInToken0After > maxAssets) {
+            revert UniswapV4FluxManager__RebalanceDeviation(totalAssetsInToken0After, minAssets, maxAssets);
+        }
+    }
 
     // We always sweep becuase this logic does not attempt to account for value sitting unallocated in UniV4
-    function mint(
+    function _mint(
         int24 tickLower,
         int24 tickUpper,
         uint128 liquidity,
         uint256 amount0Max,
         uint256 amount1Max,
         uint256 deadline
-    ) external requiresAuth {
+    ) internal {
         bytes memory actions = abi.encodePacked(
             uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR), uint8(Actions.SWEEP), uint8(Actions.SWEEP)
         );
@@ -243,11 +311,9 @@ contract UniswapV4FluxManager is FluxManager {
         // Track new position.
         trackedPositions.push(positionId);
         trackedPositionData.push(PositionData(liquidity, tickLower, tickUpper));
-
-        _refreshInternalFluxAccounting();
     }
 
-    function burn(uint256 positionId, uint256 amount0Min, uint256 amount1Min, uint256 deadline) external requiresAuth {
+    function _burn(uint256 positionId, uint256 amount0Min, uint256 amount1Min, uint256 deadline) internal {
         // Remove position from tracking if present.
         _removePositionIfPresent(positionId);
 
@@ -257,17 +323,15 @@ contract UniswapV4FluxManager is FluxManager {
         params[1] = abi.encode(token0, token1, boringVault);
 
         _modifyLiquidities(actions, params, deadline, 0);
-
-        _refreshInternalFluxAccounting();
     }
 
-    function increaseLiquidity(
+    function _increaseLiquidity(
         uint256 positionId,
         uint128 liquidity,
         uint256 amount0Max,
         uint256 amount1Max,
         uint256 deadline
-    ) external requiresAuth {
+    ) internal {
         bytes memory actions = abi.encodePacked(
             uint8(Actions.INCREASE_LIQUIDITY), uint8(Actions.SETTLE_PAIR), uint8(Actions.SWEEP), uint8(Actions.SWEEP)
         );
@@ -281,17 +345,15 @@ contract UniswapV4FluxManager is FluxManager {
         _modifyLiquidities(actions, params, deadline, address(token0) == address(0) ? amount0Max : 0);
 
         _incrementLiquidity(positionId, liquidity);
-
-        _refreshInternalFluxAccounting();
     }
 
-    function decreaseLiquidity(
+    function _decreaseLiquidity(
         uint256 positionId,
         uint128 liquidity,
         uint256 amount0Min,
         uint256 amount1Min,
         uint256 deadline
-    ) external requiresAuth {
+    ) internal {
         bytes memory actions = abi.encodePacked(uint8(Actions.DECREASE_LIQUIDITY), uint8(Actions.TAKE_PAIR));
         bytes[] memory params = new bytes[](2);
 
@@ -301,19 +363,15 @@ contract UniswapV4FluxManager is FluxManager {
         _modifyLiquidities(actions, params, deadline, 0);
 
         _decrementLiquidity(positionId, liquidity);
-
-        _refreshInternalFluxAccounting();
     }
 
-    function collectFees(uint256 positionId, uint256 deadline) external requiresAuth {
+    function _collectFees(uint256 positionId, uint256 deadline) internal {
         bytes memory actions = abi.encodePacked(uint8(Actions.DECREASE_LIQUIDITY), uint8(Actions.TAKE_PAIR));
         bytes[] memory params = new bytes[](2);
         params[0] = abi.encode(positionId, 0, 0, 0, hex"");
         params[1] = abi.encode(token0, token1, boringVault);
 
         _modifyLiquidities(actions, params, deadline, 0);
-
-        _refreshInternalFluxAccounting();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

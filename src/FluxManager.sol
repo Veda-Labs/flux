@@ -96,7 +96,7 @@ abstract contract FluxManager is Auth {
     uint8 internal immutable decimals0;
     uint8 internal immutable decimals1;
     uint8 internal immutable decimalsBoring;
-    bool internal immutable baseIn0Or1;
+    bool internal immutable baseIn0Or1; // Only used for initial share price when zero shares outstanding
     address internal immutable nativeWrapper;
 
     constructor(
@@ -162,6 +162,8 @@ abstract contract FluxManager is Auth {
         uint256 currentTime = block.timestamp;
         uint256 timeDelta = currentTime - lastPerformanceReview;
         if (timeDelta < performanceReviewFrequency) revert FluxManager__TooSoon();
+
+        // TODO Should this refresh internal accounting?
 
         (uint256 accumulatedPerShare, uint256 currentHighWatermark, uint256 currentTotalSupply, uint256 feeOwed) =
             previewPerformance();
