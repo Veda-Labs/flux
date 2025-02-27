@@ -82,6 +82,10 @@ abstract contract FluxManager is Auth {
 
     event Paused();
     event Unpaused();
+    event HighWatermarkReset();
+    event PerformanceMetricSet();
+    event DatumConfigured();
+    event PerformanceFeeSet();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       MODIFIERS                            */
@@ -166,6 +170,7 @@ abstract contract FluxManager is Auth {
         performanceMetric = newMetric;
         _refreshInternalFluxAccounting();
         _resetHighWatermark();
+        emit PerformanceMetricSet();
     }
 
     function setPayout(address newPayout) external requiresAuth {
@@ -175,6 +180,7 @@ abstract contract FluxManager is Auth {
     function setPerformanceFee(uint16 fee) external requiresAuth {
         if (fee > MAX_PERFORMANCE_FEE) revert FluxManager__BadPerformanceFee();
         performanceFee = fee;
+        emit PerformanceFeeSet();
     }
 
     function configureDatum(address _datum, uint16 _datumLowerBound, uint16 _datumUpperBound) external requiresAuth {
@@ -185,6 +191,8 @@ abstract contract FluxManager is Auth {
         ) revert FluxManager__BadDatumBounds();
         datumLowerBound = _datumLowerBound;
         datumUpperBound = _datumUpperBound;
+
+        emit DatumConfigured();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -350,6 +358,8 @@ abstract contract FluxManager is Auth {
         highWatermark = SafeCast.toUint128(accumulatedPerShare);
         totalSupplyLastReview = SafeCast.toUint128(currentTotalSupply);
         lastPerformanceReview = uint64(block.timestamp);
+
+        emit HighWatermarkReset();
     }
 
     function _claimFees(bool token0Or1) internal {

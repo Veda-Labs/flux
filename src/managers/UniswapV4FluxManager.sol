@@ -99,6 +99,15 @@ contract UniswapV4FluxManager is FluxManager {
     error UniswapV4FluxManager__SwapAggregatorBadToken1();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                         EVENTS                             */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    event ReferenceTicksSet();
+    event AggregatorSet();
+    event RebalanceDeviationSet();
+    event Rebalanced();
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       IMMUTABLES                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -147,6 +156,7 @@ contract UniswapV4FluxManager is FluxManager {
 
     function setAggregator(address _aggregator) external requiresAuth {
         aggregator = _aggregator;
+        emit AggregatorSet();
     }
 
     function setReferenceTicks(int24 newLower, int24 newUpper, bool token0Or1) external requiresAuth {
@@ -160,6 +170,9 @@ contract UniswapV4FluxManager is FluxManager {
         referenceTickUpper = newUpper;
         _refreshInternalFluxAccounting();
         _resetHighWatermark();
+
+        emit PerformanceMetricSet();
+        emit ReferenceTicksSet();
     }
 
     function setRebalanceDeviations(uint16 min, uint16 max) external requiresAuth {
@@ -168,6 +181,8 @@ contract UniswapV4FluxManager is FluxManager {
         }
         rebalanceDeviationMin = min;
         rebalanceDeviationMax = max;
+
+        emit RebalanceDeviationSet();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -371,6 +386,8 @@ contract UniswapV4FluxManager is FluxManager {
         if (totalAssetsInBaseAfter < minAssets || totalAssetsInBaseAfter > maxAssets) {
             revert UniswapV4FluxManager__RebalanceDeviation(totalAssetsInBaseAfter, minAssets, maxAssets);
         }
+
+        emit Rebalanced();
     }
 
     function _token0ApprovePermit2(uint256 amount) internal {
