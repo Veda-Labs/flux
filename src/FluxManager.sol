@@ -9,6 +9,8 @@ import {IDatum} from "src/interfaces/IDatum.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {WETH} from "@solmate/src/tokens/WETH.sol";
 
+import {console} from "@forge-std/Test.sol";
+
 /// @notice Manager used for Flux Boring Vaults
 ///
 /// @dev
@@ -57,7 +59,7 @@ abstract contract FluxManager is Auth {
     uint64 public performanceReviewFrequency;
     uint128 highWatermark;
     address public payout;
-    uint128 pendingFee;
+    uint128 public pendingFee;
     uint128 totalSupplyLastReview;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -123,7 +125,7 @@ abstract contract FluxManager is Auth {
         datumLowerBound = _datumLowerBound;
         datumUpperBound = _datumUpperBound;
 
-        performanceFee = 0.2e4;
+        performanceFee = 0.2e4; //TODO make this settable
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -163,7 +165,7 @@ abstract contract FluxManager is Auth {
         uint256 timeDelta = currentTime - lastPerformanceReview;
         if (timeDelta < performanceReviewFrequency) revert FluxManager__TooSoon();
 
-        // TODO Should this refresh internal accounting?
+        _refreshInternalFluxAccounting();
 
         (uint256 accumulatedPerShare, uint256 currentHighWatermark, uint256 currentTotalSupply, uint256 feeOwed) =
             previewPerformance();
@@ -173,6 +175,7 @@ abstract contract FluxManager is Auth {
             highWatermark = SafeCast.toUint128(accumulatedPerShare);
         }
         if (feeOwed > 0) {
+            console.log("FeeOwed: ", feeOwed);
             // Update pendingFee
             pendingFee += SafeCast.toUint128(feeOwed);
         }
@@ -194,7 +197,12 @@ abstract contract FluxManager is Auth {
     function switchPerformanceMetric(PerformanceMetric newMetric, bool token0Or1) external requiresAuth {
         _claimFees(token0Or1);
         performanceMetric = newMetric;
+        _refreshInternalFluxAccounting();
         _resetHighWatermark();
+    }
+
+    function setPayout(address newPayout) external requiresAuth {
+        payout = newPayout;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

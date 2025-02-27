@@ -29,6 +29,8 @@ contract BoringDroneTest is Test {
     PoolId internal eth_usdc_pool_id = PoolId.wrap(0x21c67e77068de97969ba93d4aab21826d33ca12bb9f565d8496e8fda8a82ca27);
     address internal ETH_USD_ORACLE = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
 
+    address internal payout = vm.addr(1);
+
     function setUp() external {
         // Setup forked environment.
         string memory rpcKey = "MAINNET_RPC_URL";
@@ -62,6 +64,8 @@ contract BoringDroneTest is Test {
             1.005e4,
             positionManager
         );
+
+        manager.setPayout(payout);
     }
 
     function testMinting() external {
@@ -124,7 +128,7 @@ contract BoringDroneTest is Test {
         assertEq(rateIn1, exchangeRate, "Zero share rate should be exchange rate");
     }
 
-    function testPerformanceReview() external {
+    function testPerformanceReviewInToken0() external {
         // Mint some shares so we can reviewPerformance
         boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
         uint256 ethAmount = 0;
@@ -132,34 +136,90 @@ contract BoringDroneTest is Test {
         deal(address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
-        manager.refreshInternalFluxAccounting();
+        uint256 exchangeRate = 2_652.626362e6;
 
-        uint256 exchangeRate = 3_652.626362e6;
+        manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN0, true);
+
+        manager.reviewPerformance();
+
+        assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
+
+        deal(address(token1), address(boringVault), 2 * usdcAmount);
+
+        manager.reviewPerformance();
+
+        uint256 expectedFeeInUsdc = 10_000e6;
+
+        manager.claimFees(false);
+
+        assertApproxEqAbs(token1.balanceOf(payout), expectedFeeInUsdc, 1, "Claimed Fee should equal expected");
+    }
+
+    function testPerformanceReviewInToken1() external {
+        // Mint some shares so we can reviewPerformance
+        boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
+        uint256 ethAmount = 0;
+        uint256 usdcAmount = 50_000e6;
+        deal(address(boringVault), ethAmount);
+        deal(address(token1), address(boringVault), usdcAmount);
+
+        uint256 exchangeRate = 2_652.626362e6;
 
         manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN1, true);
 
-        (uint256 accumulatedPerShare, uint256 currentHighWatermark, uint256 currentTotalSupply, uint256 feeOwed) =
-            manager.previewPerformance();
-
-        console.log("Initial Accumulated Per Share: ", accumulatedPerShare);
-        console.log("Initial Current High Watermark: ", currentHighWatermark);
-        console.log("Initial Current Total Supply: ", currentTotalSupply);
-        console.log("Initial Fee Owed: ", feeOwed);
-
         manager.reviewPerformance();
+
+        assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
 
         deal(address(token1), address(boringVault), 100_000e6);
 
-        manager.refreshInternalFluxAccounting();
+        manager.reviewPerformance();
 
-        (accumulatedPerShare, currentHighWatermark, currentTotalSupply, feeOwed) = manager.previewPerformance();
+        uint256 expectedFeeInUsdc = 10_000e6;
 
-        console.log("Post-Mint Accumulated Per Share: ", accumulatedPerShare);
-        console.log("Post-Mint Current High Watermark: ", currentHighWatermark);
-        console.log("Post-Mint Current Total Supply: ", currentTotalSupply);
-        console.log("Post-Mint Fee Owed: ", feeOwed);
+        manager.claimFees(false);
+
+        assertEq(token1.balanceOf(payout), expectedFeeInUsdc, "Claimed Fee should equal expected");
+    }
+
+    function testPerformanceReviewInLiquidity(int24 tickLower, int24 tickUpper) external {
+        (, int24 tick,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
+
+        tickLower = int24(bound(tickLower, -887_270, tick - 1));
+        tickUpper = int24(bound(tickUpper, tick + 1, 887_269));
+        if (tickLower == tickUpper) {
+            tickUpper++;
+        }
+        if (tickLower > tickUpper) {
+            (tickLower, tickUpper) = (tickUpper, tickLower);
+        }
+        // Mint some shares so we can reviewPerformance
+        boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
+        uint256 ethAmount = 0;
+        uint256 usdcAmount = 50_000e6;
+        deal(address(boringVault), ethAmount);
+        deal(address(token1), address(boringVault), usdcAmount);
+
+        uint256 exchangeRate = 2_652.626362e6;
+
+        console.log("tickLower: ", tickLower);
+        console.log("tickUpper: ", tickUpper);
+        manager.setReferenceTicks(tickLower, tickUpper, true);
+        manager.switchPerformanceMetric(FluxManager.PerformanceMetric.LIQUIDITY, true);
 
         manager.reviewPerformance();
+
+        assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
+
+        deal(address(token1), address(boringVault), 100_000e6);
+
+        manager.reviewPerformance();
+
+        uint256 expectedFeeInUsdc = 10_000e6;
+
+        manager.claimFees(false);
+
+        assertApproxEqRel(token1.balanceOf(payout), expectedFeeInUsdc, 0.0001e18, "Claimed Fee should equal expected");
     }
 
     // ========================================= HELPER FUNCTIONS =========================================

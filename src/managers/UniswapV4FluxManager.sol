@@ -61,7 +61,7 @@ contract UniswapV4FluxManager is FluxManager {
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     int24 internal constant MIN_TICK = -887_270;
     int24 internal constant MAX_TICK = 887_270;
-    uint128 internal constant BASE_LIQUIDITY = 1_000_000_000;
+    uint128 internal constant REFERENCE_LIQUIDITY = 1_000_000_000;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STATE                              */
@@ -69,6 +69,8 @@ contract UniswapV4FluxManager is FluxManager {
 
     uint16 public rebalanceDeviationMin = 0.99e4;
     uint16 public rebalanceDeviationMax = 1.01e4;
+    int24 public referenceTickLower = MIN_TICK;
+    int24 public referenceTickUpper = MAX_TICK;
 
     uint128 internal token0Balance;
     uint128 internal token1Balance;
@@ -135,6 +137,26 @@ contract UniswapV4FluxManager is FluxManager {
     /*                     FLUX FUNCTIONS                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    // The reference ticks must represent and in-range position, else `_totalLiquidity` will divide by zero and revert.
+    // So if the reference position is out of range, a strategist should either, adjust the ticks to something in range
+    // Or change the Performance Metric to the matching token0 or token1
+    // This does pose the risk that their are substantial fees to collect, but they can not be calculated because
+    // the reference position is out of range. This should be mitigated by regularly collecting fees, and choosing conservative wide range reference positions
+    // Also by adjusting reference positions if they are getting close to their ticks.
+    function setReferenceTicks(int24 newLower, int24 newUpper, bool token0Or1) external requiresAuth {
+        _claimFees(token0Or1);
+        // Make sure we are using Liquidity Performance Metric
+        performanceMetric = PerformanceMetric.LIQUIDITY;
+        // TODO verify lower is lower
+        referenceTickLower = newLower;
+        referenceTickUpper = newUpper;
+        _refreshInternalFluxAccounting();
+        _resetHighWatermark();
+    }
+
+    // TODO we could probs mitigate the whole, the position must be in range else this reverts by.
+    // Checking if the reference position is in range, by looking at the sqrtRatios, then if it is in range, we do the logic below
+    // if not then we just call getLiquidity for amounts
     /// @notice Calculates the accumulated liquidity of a wide range UniswapV4 position using given exchange rate.
     /// @dev This function determines the liquidity scalar `liquidityScalar` based on the available token balances
     ///      and the optimal token balances for a max range Uniswap V4 position. The calculation is based on the following system of equations:
@@ -155,20 +177,35 @@ contract UniswapV4FluxManager is FluxManager {
         // Calculate the current sqrtPrice.
         uint256 ratioX192 = FullMath.mulDiv(exchangeRate, 2 ** 192, 10 ** decimals0);
         uint160 sqrtPriceX96 = SafeCast.toUint160(_sqrt(ratioX192));
+        uint160 lowerSqrtPriceX96 = TickMath.getSqrtRatioAtTick(referenceTickLower);
+        uint160 upperSqrtPriceX96 = TickMath.getSqrtRatioAtTick(referenceTickUpper);
 
-        (uint256 scaledToken0Balance, uint256 scaledToken1Balance) = LiquidityAmounts.getAmountsForLiquidity(
-            sqrtPriceX96, TickMath.getSqrtRatioAtTick(MIN_TICK), TickMath.getSqrtRatioAtTick(MAX_TICK), BASE_LIQUIDITY
-        );
+        if (sqrtPriceX96 >= lowerSqrtPriceX96 && sqrtPriceX96 <= upperSqrtPriceX96) {
+            // Reference position is in range
+            (uint256 scaledToken0Balance, uint256 scaledToken1Balance) = LiquidityAmounts.getAmountsForLiquidity(
+                sqrtPriceX96, lowerSqrtPriceX96, upperSqrtPriceX96, REFERENCE_LIQUIDITY
+            );
 
-        (uint256 t0B, uint256 t1B) = _totalAssets(exchangeRate);
+            (uint256 t0B, uint256 t1B) = _totalAssets(exchangeRate);
 
-        // The math has spoken and it actually does not matter if token0 or token1 is limiting the resulting
-        // liquidity scalar equation is the same, so no need to check what is limiting.
-        uint256 liquidityScalarNumerator = t0B.mulDivDown(exchangeRate, 10 ** decimals0) + t1B;
-        uint256 liquidityScalarDenominator =
-            scaledToken0Balance.mulDivDown(exchangeRate, 10 ** decimals0) + scaledToken1Balance;
-        // accumulatedLiquidity = numerator * BASE_LIQUIDITY / denominator
-        accumulated = liquidityScalarNumerator.mulDivDown(BASE_LIQUIDITY, liquidityScalarDenominator);
+            // The math has spoken and it actually does not matter if token0 or token1 is limiting the resulting
+            // liquidity scalar equation is the same, so no need to check what is limiting.
+            uint256 liquidityScalarNumerator = t0B.mulDivDown(exchangeRate, 10 ** decimals0) + t1B;
+            uint256 liquidityScalarDenominator =
+                scaledToken0Balance.mulDivDown(exchangeRate, 10 ** decimals0) + scaledToken1Balance;
+            // accumulatedLiquidity = numerator * REFERENCE_LIQUIDITY / denominator
+            console.log("numerator: ", liquidityScalarNumerator);
+            console.log("denominator: ", liquidityScalarDenominator);
+            accumulated = FullMath.mulDiv(liquidityScalarNumerator, REFERENCE_LIQUIDITY, liquidityScalarDenominator);
+        } else if (sqrtPriceX96 < lowerSqrtPriceX96) {
+            // Reference position is out of range
+            // TODO Convert all amounts to either token0 or token1
+            // then call get liquidity for amount
+        } else if (sqrtPriceX96 > upperSqrtPriceX96) {
+            // Reference position is out of range
+            // TODO Convert all amounts to either token0 or token1
+            // then call get liquidity for amount
+        }
     }
 
     function _convertLiquidityToToken(uint256 exchangeRate, uint128 liquidity, bool token0Or1)
@@ -182,7 +219,10 @@ contract UniswapV4FluxManager is FluxManager {
         uint160 sqrtPriceX96 = SafeCast.toUint160(_sqrt(ratioX192));
 
         (uint256 t0B, uint256 t1B) = LiquidityAmounts.getAmountsForLiquidity(
-            sqrtPriceX96, TickMath.getSqrtRatioAtTick(MIN_TICK), TickMath.getSqrtRatioAtTick(MAX_TICK), liquidity
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(referenceTickLower),
+            TickMath.getSqrtRatioAtTick(referenceTickUpper),
+            liquidity
         );
 
         // Convert into 1 token.
@@ -281,9 +321,9 @@ contract UniswapV4FluxManager is FluxManager {
         uint256 totalAssetsInToken0After = totalAssets(exchangeRate, true);
         uint256 minAssets = totalAssetsInToken0Before.mulDivDown(rebalanceDeviationMin, BPS_SCALE);
         uint256 maxAssets = totalAssetsInToken0Before.mulDivDown(rebalanceDeviationMax, BPS_SCALE);
-        if (totalAssetsInToken0After < minAssets || totalAssetsInToken0After > maxAssets) {
-            revert UniswapV4FluxManager__RebalanceDeviation(totalAssetsInToken0After, minAssets, maxAssets);
-        }
+        // if (totalAssetsInToken0After < minAssets || totalAssetsInToken0After > maxAssets) {
+        //     revert UniswapV4FluxManager__RebalanceDeviation(totalAssetsInToken0After, minAssets, maxAssets);
+        // }
     }
 
     // We always sweep becuase this logic does not attempt to account for value sitting unallocated in UniV4
