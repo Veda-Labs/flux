@@ -14,7 +14,7 @@ import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
 import {TickMath} from "@uni-v3-c/libraries/TickMath.sol";
 import {ChainlinkDatum} from "src/datums/ChainlinkDatum.sol";
 
-contract BoringDroneTest is Test {
+contract UniswapV4FluxManagerTest is Test {
     using Address for address;
 
     RolesAuthority internal rolesAuthority;
@@ -97,8 +97,6 @@ contract BoringDroneTest is Test {
             usdcAmount
         );
 
-        console.log("Liquidity minting", liquidity);
-
         // current tick for uniswap V3 pool 68456
         UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
@@ -108,18 +106,93 @@ contract BoringDroneTest is Test {
         (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
         assertApproxEqRel(token0Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
         assertApproxEqRel(token1Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
-
-        uint256 totalAssetsInToken0 = manager.totalAssets(price, true);
-        uint256 totalAssetsInToken1 = manager.totalAssets(price, false);
-
-        console.log("Total Assets in Token0: ", totalAssetsInToken0);
-        console.log("Total Assets in Token1: ", totalAssetsInToken1);
-
-        console.log("ETH Balance: ", address(boringVault).balance);
-        console.log("USDC Balance: ", token1.balanceOf(address(boringVault)));
     }
 
-    function testGetRate() external {
+    function testBurning(uint256 ethAmount, uint256 usdcAmount) external {
+        ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
+        usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
+        deal(address(boringVault), ethAmount);
+        deal(address(token1), address(boringVault), usdcAmount);
+
+        (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
+
+        uint256 price = 2_652.626362e6;
+
+        int24 tickLower = -887_270;
+        int24 tickUpper = 887_270;
+        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(tickUpper),
+            ethAmount,
+            usdcAmount
+        );
+
+        UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
+        actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.BURN;
+        actions[0].data = abi.encode(manager.trackedPositions(0), 0, 0, block.timestamp);
+        manager.rebalance(price, actions);
+
+        (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
+        assertApproxEqRel(token0Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
+        assertApproxEqRel(token1Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
+    }
+
+    function testLiquidityManagement(uint256 ethAmount, uint256 usdcAmount) external {
+        ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
+        usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
+        deal(address(boringVault), 2 * ethAmount);
+        deal(address(token1), address(boringVault), 2 * usdcAmount);
+
+        (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
+
+        uint256 price = 2_652.626362e6;
+
+        int24 tickLower = -887_270;
+        int24 tickUpper = 887_270;
+        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(tickUpper),
+            ethAmount,
+            usdcAmount
+        );
+
+        UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
+        actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.INCREASE_LIQUIDITY;
+        actions[0].data = abi.encode(manager.trackedPositions(0), liquidity, ethAmount, usdcAmount, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.DECREASE_LIQUIDITY;
+        actions[0].data = abi.encode(manager.trackedPositions(0), liquidity / 2, 0, 0, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.COLLECT_FEES;
+        actions[0].data = abi.encode(manager.trackedPositions(0), block.timestamp);
+        manager.rebalance(price, actions);
+
+        (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
+        assertApproxEqRel(token0Balance, 2 * ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
+        assertApproxEqRel(
+            token1Balance, 2 * usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount"
+        );
+    }
+
+    // TODO test accounting with multiple different positions.
+
+    function testGetRate() external view {
         uint256 exchangeRate = 2_652.626362e6;
 
         uint256 rateIn0 = manager.getRate(exchangeRate, true);
@@ -135,8 +208,6 @@ contract BoringDroneTest is Test {
         uint256 usdcAmount = 50_000e6;
         deal(address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
-
-        uint256 exchangeRate = 2_652.626362e6;
 
         manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN0, true);
 
@@ -163,8 +234,6 @@ contract BoringDroneTest is Test {
         deal(address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
-        uint256 exchangeRate = 2_652.626362e6;
-
         manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN1, true);
 
         manager.reviewPerformance();
@@ -183,10 +252,8 @@ contract BoringDroneTest is Test {
     }
 
     function testPerformanceReviewInLiquidity(int24 tickLower, int24 tickUpper) external {
-        (, int24 tick,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
-
-        tickLower = int24(bound(tickLower, -887_270, tick - 1));
-        tickUpper = int24(bound(tickUpper, tick + 1, 887_269));
+        tickLower = int24(bound(tickLower, -887_270, 887_269));
+        tickUpper = int24(bound(tickUpper, -887_270, 887_269));
         if (tickLower == tickUpper) {
             tickUpper++;
         }
@@ -200,10 +267,6 @@ contract BoringDroneTest is Test {
         deal(address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
-        uint256 exchangeRate = 2_652.626362e6;
-
-        console.log("tickLower: ", tickLower);
-        console.log("tickUpper: ", tickUpper);
         manager.setReferenceTicks(tickLower, tickUpper, true);
         manager.switchPerformanceMetric(FluxManager.PerformanceMetric.LIQUIDITY, true);
 

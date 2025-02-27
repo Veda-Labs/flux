@@ -175,7 +175,6 @@ abstract contract FluxManager is Auth {
             highWatermark = SafeCast.toUint128(accumulatedPerShare);
         }
         if (feeOwed > 0) {
-            console.log("FeeOwed: ", feeOwed);
             // Update pendingFee
             pendingFee += SafeCast.toUint128(feeOwed);
         }

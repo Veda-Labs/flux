@@ -75,7 +75,7 @@ contract UniswapV4FluxManager is FluxManager {
     uint128 internal token0Balance;
     uint128 internal token1Balance;
 
-    uint256[] internal trackedPositions;
+    uint256[] public trackedPositions;
 
     PositionData[] internal trackedPositionData;
 
@@ -137,12 +137,6 @@ contract UniswapV4FluxManager is FluxManager {
     /*                     FLUX FUNCTIONS                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    // The reference ticks must represent and in-range position, else `_totalLiquidity` will divide by zero and revert.
-    // So if the reference position is out of range, a strategist should either, adjust the ticks to something in range
-    // Or change the Performance Metric to the matching token0 or token1
-    // This does pose the risk that their are substantial fees to collect, but they can not be calculated because
-    // the reference position is out of range. This should be mitigated by regularly collecting fees, and choosing conservative wide range reference positions
-    // Also by adjusting reference positions if they are getting close to their ticks.
     function setReferenceTicks(int24 newLower, int24 newUpper, bool token0Or1) external requiresAuth {
         _claimFees(token0Or1);
         // Make sure we are using Liquidity Performance Metric
@@ -154,10 +148,7 @@ contract UniswapV4FluxManager is FluxManager {
         _resetHighWatermark();
     }
 
-    // TODO we could probs mitigate the whole, the position must be in range else this reverts by.
-    // Checking if the reference position is in range, by looking at the sqrtRatios, then if it is in range, we do the logic below
-    // if not then we just call getLiquidity for amounts
-    /// @notice Calculates the accumulated liquidity of a wide range UniswapV4 position using given exchange rate.
+    /// @notice Calculates the accumulated liquidity of a reference UniswapV4 position using given exchange rate.
     /// @dev This function determines the liquidity scalar `liquidityScalar` based on the available token balances
     ///      and the optimal token balances for a max range Uniswap V4 position. The calculation is based on the following system of equations:
     ///      - currentToken0Balance - token0SwapAmount = scaledToken0Balance * liquidityScalar
@@ -180,13 +171,17 @@ contract UniswapV4FluxManager is FluxManager {
         uint160 lowerSqrtPriceX96 = TickMath.getSqrtRatioAtTick(referenceTickLower);
         uint160 upperSqrtPriceX96 = TickMath.getSqrtRatioAtTick(referenceTickUpper);
 
-        if (sqrtPriceX96 >= lowerSqrtPriceX96 && sqrtPriceX96 <= upperSqrtPriceX96) {
+        (uint256 t0B, uint256 t1B) = _totalAssets(exchangeRate);
+        if (sqrtPriceX96 <= lowerSqrtPriceX96) {
+            // Reference position is out of range.
+            // Convert all token1 to token0
+            uint256 total = t0B + t1B.mulDivDown(10 ** decimals0, exchangeRate);
+            accumulated = LiquidityAmounts.getLiquidityForAmount0(lowerSqrtPriceX96, upperSqrtPriceX96, total);
+        } else if (sqrtPriceX96 < upperSqrtPriceX96) {
             // Reference position is in range
             (uint256 scaledToken0Balance, uint256 scaledToken1Balance) = LiquidityAmounts.getAmountsForLiquidity(
                 sqrtPriceX96, lowerSqrtPriceX96, upperSqrtPriceX96, REFERENCE_LIQUIDITY
             );
-
-            (uint256 t0B, uint256 t1B) = _totalAssets(exchangeRate);
 
             // The math has spoken and it actually does not matter if token0 or token1 is limiting the resulting
             // liquidity scalar equation is the same, so no need to check what is limiting.
@@ -194,17 +189,12 @@ contract UniswapV4FluxManager is FluxManager {
             uint256 liquidityScalarDenominator =
                 scaledToken0Balance.mulDivDown(exchangeRate, 10 ** decimals0) + scaledToken1Balance;
             // accumulatedLiquidity = numerator * REFERENCE_LIQUIDITY / denominator
-            console.log("numerator: ", liquidityScalarNumerator);
-            console.log("denominator: ", liquidityScalarDenominator);
             accumulated = FullMath.mulDiv(liquidityScalarNumerator, REFERENCE_LIQUIDITY, liquidityScalarDenominator);
-        } else if (sqrtPriceX96 < lowerSqrtPriceX96) {
-            // Reference position is out of range
-            // TODO Convert all amounts to either token0 or token1
-            // then call get liquidity for amount
-        } else if (sqrtPriceX96 > upperSqrtPriceX96) {
-            // Reference position is out of range
-            // TODO Convert all amounts to either token0 or token1
-            // then call get liquidity for amount
+        } else {
+            // Reference position is out of range.
+            // Convert all token0 to token1
+            uint256 total = t1B + t0B.mulDivDown(exchangeRate, 10 ** decimals0);
+            accumulated = LiquidityAmounts.getLiquidityForAmount1(lowerSqrtPriceX96, upperSqrtPriceX96, total);
         }
     }
 
@@ -284,7 +274,8 @@ contract UniswapV4FluxManager is FluxManager {
         checkDatum(exchangeRate)
         requiresAuth
     {
-        uint256 totalAssetsInToken0Before = totalAssets(exchangeRate, true);
+        _refreshInternalFluxAccounting();
+        uint256 totalAssetsInBaseBefore = totalAssets(exchangeRate, baseIn0Or1);
         for (uint256 i; i < actions.length; ++i) {
             Action calldata action = actions[i];
             if (action.kind == ActionKind.MINT) {
@@ -318,12 +309,12 @@ contract UniswapV4FluxManager is FluxManager {
         _refreshInternalFluxAccounting();
 
         // Check rebalance deviation
-        uint256 totalAssetsInToken0After = totalAssets(exchangeRate, true);
-        uint256 minAssets = totalAssetsInToken0Before.mulDivDown(rebalanceDeviationMin, BPS_SCALE);
-        uint256 maxAssets = totalAssetsInToken0Before.mulDivDown(rebalanceDeviationMax, BPS_SCALE);
-        // if (totalAssetsInToken0After < minAssets || totalAssetsInToken0After > maxAssets) {
-        //     revert UniswapV4FluxManager__RebalanceDeviation(totalAssetsInToken0After, minAssets, maxAssets);
-        // }
+        uint256 totalAssetsInBaseAfter = totalAssets(exchangeRate, baseIn0Or1);
+        uint256 minAssets = totalAssetsInBaseBefore.mulDivDown(rebalanceDeviationMin, BPS_SCALE);
+        uint256 maxAssets = totalAssetsInBaseBefore.mulDivDown(rebalanceDeviationMax, BPS_SCALE);
+        if (totalAssetsInBaseAfter < minAssets || totalAssetsInBaseAfter > maxAssets) {
+            revert UniswapV4FluxManager__RebalanceDeviation(totalAssetsInBaseAfter, minAssets, maxAssets);
+        }
     }
 
     // We always sweep becuase this logic does not attempt to account for value sitting unallocated in UniV4
