@@ -5,9 +5,15 @@ import {FluxManager, FixedPointMathLib, SafeCast} from "src/FluxManager.sol";
 import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
 import {TickMath} from "@uni-v3-c/libraries/TickMath.sol";
 import {IPositionManager} from "@uni-v4-p/interfaces/IPositionManager.sol";
+import {IV4Router} from "@uni-v4-p/interfaces/IV4Router.sol";
+import {IUniversalRouter} from "src/interfaces/IUniversalRouter.sol";
 import {Actions} from "@uni-v4-p/libraries/Actions.sol";
 import {ERC20} from "@solmate/src/tokens/ERC20.sol";
 import {FullMath} from "@uni-v4-c/libraries/FullMath.sol";
+import {Commands} from "src/libraries/Commands.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 
 import {console} from "@forge-std/Test.sol";
 
@@ -19,11 +25,19 @@ contract UniswapV4FluxManager is FluxManager {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     enum ActionKind {
+        TOKEN0_APPROVE_PERMIT_2,
+        TOKEN1_APPROVE_PERMIT_2,
+        TOKEN0_PERMIT_2_APPROVE_POSITION_MANAGER,
+        TOKEN1_PERMIT_2_APPROVE_POSITION_MANAGER,
+        TOKEN0_PERMIT_2_APPROVE_UNIVERSAL_ROUTER,
+        TOKEN1_PERMIT_2_APPROVE_UNIVERSAL_ROUTER,
         MINT,
         BURN,
         INCREASE_LIQUIDITY,
         DECREASE_LIQUIDITY,
-        COLLECT_FEES
+        COLLECT_FEES,
+        SWAP_TOKEN0_FOR_TOKEN1_IN_POOL,
+        SWAP_TOKEN1_FOR_TOKEN0_IN_POOL
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -33,19 +47,6 @@ contract UniswapV4FluxManager is FluxManager {
     struct Action {
         ActionKind kind;
         bytes data;
-    }
-
-    struct PoolKey {
-        /// @notice The lower currency of the pool, sorted numerically
-        address currency0;
-        /// @notice The higher currency of the pool, sorted numerically
-        address currency1;
-        /// @notice The pool LP fee, capped at 1_000_000. If the highest bit is 1, the pool has a dynamic fee and must be exactly equal to 0x800000
-        uint24 fee;
-        /// @notice Ticks that involve positions must be a multiple of tick spacing
-        int24 tickSpacing;
-        /// @notice The hooks of the pool
-        address hooks;
     }
 
     struct PositionData {
@@ -59,18 +60,18 @@ contract UniswapV4FluxManager is FluxManager {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
-    int24 internal constant MIN_TICK = -887_270;
-    int24 internal constant MAX_TICK = 887_270;
     uint128 internal constant REFERENCE_LIQUIDITY = 1_000_000_000;
+    bytes4 internal constant PERMIT2_APPROVE_SELECTOR =
+        bytes4(keccak256(abi.encodePacked("approve(address,address,uint160,uint48)")));
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STATE                              */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    uint16 public rebalanceDeviationMin = 0.99e4;
-    uint16 public rebalanceDeviationMax = 1.01e4;
-    int24 public referenceTickLower = MIN_TICK;
-    int24 public referenceTickUpper = MAX_TICK;
+    uint16 public rebalanceDeviationMin;
+    uint16 public rebalanceDeviationMax;
+    int24 public referenceTickLower;
+    int24 public referenceTickUpper;
 
     uint128 internal token0Balance;
     uint128 internal token1Balance;
@@ -91,6 +92,7 @@ contract UniswapV4FluxManager is FluxManager {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     IPositionManager internal immutable positionManager;
+    address internal immutable universalRouter;
 
     constructor(
         address _owner,
@@ -102,7 +104,8 @@ contract UniswapV4FluxManager is FluxManager {
         address _datum,
         uint16 _datumLowerBound,
         uint16 _datumUpperBound,
-        address _positionManager
+        address _positionManager,
+        address _universalRouter
     )
         FluxManager(
             _owner,
@@ -117,20 +120,13 @@ contract UniswapV4FluxManager is FluxManager {
         )
     {
         positionManager = IPositionManager(_positionManager);
-        bytes memory approveData = abi.encodeWithSelector(ERC20.approve.selector, PERMIT2, type(uint256).max);
-        if (_token0 != address(0)) boringVault.manage(_token0, approveData, 0);
-        boringVault.manage(_token1, approveData, 0);
+        universalRouter = _universalRouter;
 
-        // TODO make this flow work for token0 being an ERC20.
-        approveData = abi.encodeWithSelector(
-            bytes4(keccak256(abi.encodePacked("approve(address,address,uint160,uint48)"))),
-            _token1,
-            _positionManager,
-            type(uint160).max,
-            type(uint48).max
-        );
-        if (_token0 != address(0)) boringVault.manage(_token0, approveData, 0);
-        boringVault.manage(PERMIT2, approveData, 0);
+        referenceTickLower = -887_270;
+        referenceTickUpper = 887_270;
+
+        rebalanceDeviationMin = 0.99e4;
+        rebalanceDeviationMax = 1.01e4;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -278,7 +274,25 @@ contract UniswapV4FluxManager is FluxManager {
         uint256 totalAssetsInBaseBefore = totalAssets(exchangeRate, baseIn0Or1);
         for (uint256 i; i < actions.length; ++i) {
             Action calldata action = actions[i];
-            if (action.kind == ActionKind.MINT) {
+            if (action.kind == ActionKind.TOKEN0_APPROVE_PERMIT_2) {
+                uint256 amount = abi.decode(action.data, (uint256));
+                _token0ApprovePermit2(amount);
+            } else if (action.kind == ActionKind.TOKEN1_APPROVE_PERMIT_2) {
+                uint256 amount = abi.decode(action.data, (uint256));
+                _token1ApprovePermit2(amount);
+            } else if (action.kind == ActionKind.TOKEN0_PERMIT_2_APPROVE_POSITION_MANAGER) {
+                (uint160 amount, uint48 deadline) = abi.decode(action.data, (uint160, uint48));
+                _token0Permit2ApprovePositionManager(amount, deadline);
+            } else if (action.kind == ActionKind.TOKEN1_PERMIT_2_APPROVE_POSITION_MANAGER) {
+                (uint160 amount, uint48 deadline) = abi.decode(action.data, (uint160, uint48));
+                _token1Permit2ApprovePositionManager(amount, deadline);
+            } else if (action.kind == ActionKind.TOKEN0_PERMIT_2_APPROVE_UNIVERSAL_ROUTER) {
+                (uint160 amount, uint48 deadline) = abi.decode(action.data, (uint160, uint48));
+                _token0Permit2ApproveUniversalRouter(amount, deadline);
+            } else if (action.kind == ActionKind.TOKEN1_PERMIT_2_APPROVE_UNIVERSAL_ROUTER) {
+                (uint160 amount, uint48 deadline) = abi.decode(action.data, (uint160, uint48));
+                _token1Permit2ApproveUniversalRouter(amount, deadline);
+            } else if (action.kind == ActionKind.MINT) {
                 (
                     int24 tickLower,
                     int24 tickUpper,
@@ -303,6 +317,14 @@ contract UniswapV4FluxManager is FluxManager {
             } else if (action.kind == ActionKind.COLLECT_FEES) {
                 (uint256 positionId, uint256 deadline) = abi.decode(action.data, (uint256, uint256));
                 _collectFees(positionId, deadline);
+            } else if (action.kind == ActionKind.SWAP_TOKEN0_FOR_TOKEN1_IN_POOL) {
+                (uint128 amount0In, uint128 minAmount1Out, uint256 deadline) =
+                    abi.decode(action.data, (uint128, uint128, uint256));
+                _swapToken0ForToken1InPool(amount0In, minAmount1Out, deadline);
+            } else if (action.kind == ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL) {
+                (uint128 amount1In, uint128 minAmount0Out, uint256 deadline) =
+                    abi.decode(action.data, (uint128, uint128, uint256));
+                _swapToken0ForToken1InPool(amount1In, minAmount0Out, deadline);
             }
         }
 
@@ -315,6 +337,40 @@ contract UniswapV4FluxManager is FluxManager {
         if (totalAssetsInBaseAfter < minAssets || totalAssetsInBaseAfter > maxAssets) {
             revert UniswapV4FluxManager__RebalanceDeviation(totalAssetsInBaseAfter, minAssets, maxAssets);
         }
+    }
+
+    function _token0ApprovePermit2(uint256 amount) internal {
+        bytes memory approveData = abi.encodeWithSelector(ERC20.approve.selector, PERMIT2, amount);
+        boringVault.manage(address(token0), approveData, 0);
+    }
+
+    function _token1ApprovePermit2(uint256 amount) internal {
+        bytes memory approveData = abi.encodeWithSelector(ERC20.approve.selector, PERMIT2, amount);
+        boringVault.manage(address(token1), approveData, 0);
+    }
+
+    function _token0Permit2ApprovePositionManager(uint160 amount, uint48 deadline) internal {
+        bytes memory approveData =
+            abi.encodeWithSelector(PERMIT2_APPROVE_SELECTOR, token0, positionManager, amount, deadline);
+        boringVault.manage(PERMIT2, approveData, 0);
+    }
+
+    function _token1Permit2ApprovePositionManager(uint160 amount, uint48 deadline) internal {
+        bytes memory approveData =
+            abi.encodeWithSelector(PERMIT2_APPROVE_SELECTOR, token1, positionManager, amount, deadline);
+        boringVault.manage(PERMIT2, approveData, 0);
+    }
+
+    function _token0Permit2ApproveUniversalRouter(uint160 amount, uint48 deadline) internal {
+        bytes memory approveData =
+            abi.encodeWithSelector(PERMIT2_APPROVE_SELECTOR, token0, universalRouter, amount, deadline);
+        boringVault.manage(PERMIT2, approveData, 0);
+    }
+
+    function _token1Permit2ApproveUniversalRouter(uint160 amount, uint48 deadline) internal {
+        bytes memory approveData =
+            abi.encodeWithSelector(PERMIT2_APPROVE_SELECTOR, token1, universalRouter, amount, deadline);
+        boringVault.manage(PERMIT2, approveData, 0);
     }
 
     // We always sweep becuase this logic does not attempt to account for value sitting unallocated in UniV4
@@ -330,7 +386,8 @@ contract UniswapV4FluxManager is FluxManager {
             uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR), uint8(Actions.SWEEP), uint8(Actions.SWEEP)
         );
         bytes[] memory params = new bytes[](4);
-        PoolKey memory poolKey = PoolKey(address(token0), address(token1), 500, 10, address(0));
+        PoolKey memory poolKey =
+            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(address(0)));
 
         params[0] = abi.encode(poolKey, tickLower, tickUpper, liquidity, amount0Max, amount1Max, boringVault, hex"");
         params[1] = abi.encode(token0, token1);
@@ -403,6 +460,74 @@ contract UniswapV4FluxManager is FluxManager {
         params[1] = abi.encode(token0, token1, boringVault);
 
         _modifyLiquidities(actions, params, deadline, 0);
+    }
+
+    function _swapToken0ForToken1InPool(uint128 amount0In, uint128 minAmount1Out, uint256 deadline) internal {
+        bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));
+        // Encode V4Router actions
+        bytes memory actions =
+            abi.encodePacked(uint8(Actions.SWAP_EXACT_IN_SINGLE), uint8(Actions.SETTLE_ALL), uint8(Actions.TAKE_ALL));
+
+        bytes[] memory params = new bytes[](3);
+
+        PoolKey memory poolKey =
+            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(address(0)));
+
+        // First parameter: swap configuration
+        params[0] = abi.encode(
+            IV4Router.ExactInputSingleParams({
+                poolKey: poolKey,
+                zeroForOne: true, // true if we're swapping token0 for token1
+                amountIn: amount0In, // amount of tokens we're swapping
+                amountOutMinimum: minAmount1Out, // minimum amount we expect to receive
+                hookData: bytes("") // no hook data needed
+            })
+        );
+        params[1] = abi.encode(token0, amount0In);
+        params[2] = abi.encode(token1, minAmount1Out);
+
+        // Combine actions and params into inputs
+        bytes[] memory inputs = new bytes[](1);
+        inputs[0] = abi.encode(actions, params);
+
+        // Execute the swap
+        bytes memory swapData = abi.encodeWithSelector(IUniversalRouter.execute.selector, commands, inputs, deadline);
+
+        boringVault.manage(universalRouter, swapData, address(token0) == address(0) ? amount0In : 0);
+    }
+
+    function _swapToken1ForToken0InPool(uint128 amount1In, uint128 minAmount0Out, uint256 deadline) internal {
+        bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));
+        // Encode V4Router actions
+        bytes memory actions =
+            abi.encodePacked(uint8(Actions.SWAP_EXACT_IN_SINGLE), uint8(Actions.SETTLE_ALL), uint8(Actions.TAKE_ALL));
+
+        bytes[] memory params = new bytes[](3);
+
+        PoolKey memory poolKey =
+            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(address(0)));
+
+        // First parameter: swap configuration
+        params[0] = abi.encode(
+            IV4Router.ExactInputSingleParams({
+                poolKey: poolKey,
+                zeroForOne: false, // false if we're swapping token1 for token0
+                amountIn: amount1In, // amount of tokens we're swapping
+                amountOutMinimum: minAmount0Out, // minimum amount we expect to receive
+                hookData: bytes("") // no hook data needed
+            })
+        );
+        params[1] = abi.encode(token1, amount1In);
+        params[2] = abi.encode(token0, minAmount0Out);
+
+        // Combine actions and params into inputs
+        bytes[] memory inputs = new bytes[](1);
+        inputs[0] = abi.encode(actions, params);
+
+        // Execute the swap
+        bytes memory swapData = abi.encodeWithSelector(IUniversalRouter.execute.selector, commands, inputs, deadline);
+
+        boringVault.manage(universalRouter, swapData, 0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

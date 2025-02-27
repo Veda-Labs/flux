@@ -22,6 +22,7 @@ contract UniswapV4FluxManagerTest is Test {
     ChainlinkDatum internal datum;
     UniswapV4FluxManager internal manager;
     address internal positionManager = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
+    address internal universalRouter = 0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af;
     ERC20 internal token0 = ERC20(address(0));
     ERC20 internal token1 = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     address internal nativeWrapper = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
@@ -62,10 +63,24 @@ contract UniswapV4FluxManagerTest is Test {
             address(datum),
             0.995e4,
             1.005e4,
-            positionManager
+            positionManager,
+            universalRouter
         );
 
         manager.setPayout(payout);
+
+        uint256 price = 2_652.626362e6;
+
+        // Give required approvals.
+        UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](3);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.TOKEN1_APPROVE_PERMIT_2;
+        actions[0].data = abi.encode(type(uint256).max);
+        actions[1].kind = UniswapV4FluxManager.ActionKind.TOKEN1_PERMIT_2_APPROVE_POSITION_MANAGER;
+        actions[1].data = abi.encode(type(uint160).max, type(uint48).max);
+        actions[2].kind = UniswapV4FluxManager.ActionKind.TOKEN1_PERMIT_2_APPROVE_UNIVERSAL_ROUTER;
+        actions[2].data = abi.encode(type(uint160).max, type(uint48).max);
+
+        manager.rebalance(price, actions);
     }
 
     function testMinting() external {
@@ -188,6 +203,22 @@ contract UniswapV4FluxManagerTest is Test {
         assertApproxEqRel(
             token1Balance, 2 * usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount"
         );
+    }
+
+    function testSwapping() external {
+        uint256 ethAmount = 1e18;
+        uint256 usdcAmount = 10_000e6;
+        deal(address(boringVault), ethAmount);
+        deal(address(token1), address(boringVault), usdcAmount);
+
+        uint256 price = 2_652.626362e6;
+
+        UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](2);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN0_FOR_TOKEN1_IN_POOL;
+        actions[0].data = abi.encode(ethAmount / 2, 0, block.timestamp);
+        actions[1].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
+        actions[1].data = abi.encode(usdcAmount / 2, 0, block.timestamp);
+        manager.rebalance(price, actions);
     }
 
     // TODO test accounting with multiple different positions.
