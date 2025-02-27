@@ -13,9 +13,11 @@ import {FullMath} from "@uni-v4-c/libraries/FullMath.sol";
 import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
 import {TickMath} from "@uni-v3-c/libraries/TickMath.sol";
 import {ChainlinkDatum} from "src/datums/ChainlinkDatum.sol";
+import {FixedPointMathLib} from "@solmate/src/utils/FixedPointMathLib.sol";
 
 contract UniswapV4FluxManagerTest is Test {
     using Address for address;
+    using FixedPointMathLib for uint256;
 
     RolesAuthority internal rolesAuthority;
     BoringVault internal boringVault;
@@ -81,6 +83,8 @@ contract UniswapV4FluxManagerTest is Test {
         actions[2].data = abi.encode(type(uint160).max, type(uint48).max);
 
         manager.rebalance(price, actions);
+
+        manager.setPerformanceFee(0.2e4);
     }
 
     function testMinting() external {
@@ -221,6 +225,63 @@ contract UniswapV4FluxManagerTest is Test {
         manager.rebalance(price, actions);
     }
 
+    function testAggregatorSwapping() external {
+        manager.setAggregator(address(this));
+        uint256 ethAmount = 1e18;
+        uint256 usdcAmount = 10_000e6;
+        deal(address(boringVault), ethAmount);
+        deal(address(token1), address(boringVault), usdcAmount);
+
+        uint256 price = 2_652.626362e6;
+        UniswapV4FluxManager.Action[] memory actions;
+        bytes memory swapData;
+
+        uint256 expectedAmountOut = price.mulDivDown(ethAmount / 2, 1e18);
+
+        // Happy path
+        swapData = abi.encodeWithSelector(this.swap.selector, token0, ethAmount, token1, expectedAmountOut);
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
+        actions[0].data = abi.encode(ethAmount / 2, true, expectedAmountOut, swapData);
+        manager.rebalance(price, actions);
+
+        // Failure not meeting min amount out
+        swapData = abi.encodeWithSelector(
+            this.badSwapNotSpendingMeetingMinAmountOut.selector, token0, ethAmount, token1, expectedAmountOut
+        );
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
+        actions[0].data = abi.encode(ethAmount / 2, true, expectedAmountOut, swapData);
+        vm.expectRevert(
+            bytes(abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__SwapAggregatorBadToken1.selector))
+        );
+        manager.rebalance(price, actions);
+
+        // Failure minting shares during swap.
+        swapData = abi.encodeWithSelector(
+            this.badSwapNotSpendingMintingShares.selector, token0, ethAmount, token1, expectedAmountOut
+        );
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
+        actions[0].data = abi.encode(ethAmount / 2, true, expectedAmountOut, swapData);
+        vm.expectRevert(
+            bytes(
+                abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__RebalanceChangedTotalSupply.selector)
+            )
+        );
+        manager.rebalance(price, actions);
+
+        // Failure not spending all approval
+        swapData = abi.encodeWithSelector(this.badSwapNotSpendingAllApproval.selector, token1, usdcAmount, token0, 1);
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
+        actions[0].data = abi.encode(usdcAmount, false, 1, swapData);
+        vm.expectRevert(
+            bytes(abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__SwapAggregatorBadToken1.selector))
+        );
+        manager.rebalance(price, actions);
+    }
+
     // TODO test accounting with multiple different positions.
 
     function testGetRate() external view {
@@ -333,5 +394,75 @@ contract UniswapV4FluxManagerTest is Test {
             y = z;
             z = (_x / z + z) / 2;
         }
+    }
+
+    // Mock Aggregator
+    function swap(ERC20 tokenIn, uint256 amountIn, ERC20 tokenOut, uint256 minAmountOut) external payable {
+        if (address(tokenIn) != address(0)) {
+            // Transfer senders tokenIn in.
+            tokenIn.transferFrom(msg.sender, address(this), amountIn);
+        }
+
+        if (address(tokenOut) == address(0)) {
+            deal(msg.sender, msg.sender.balance + minAmountOut);
+        } else {
+            // Mint sender tokenOut
+            deal(address(tokenOut), msg.sender, tokenOut.balanceOf(msg.sender) + minAmountOut);
+        }
+    }
+
+    function badSwapNotSpendingAllApproval(ERC20 tokenIn, uint256 amountIn, ERC20 tokenOut, uint256 minAmountOut)
+        external
+        payable
+    {
+        if (address(tokenIn) != address(0)) {
+            // Transfer senders tokenIn in.
+            tokenIn.transferFrom(msg.sender, address(this), amountIn / 2);
+        }
+
+        if (address(tokenOut) == address(0)) {
+            deal(msg.sender, msg.sender.balance + minAmountOut);
+        } else {
+            // Mint sender tokenOut
+            deal(address(tokenOut), msg.sender, tokenOut.balanceOf(msg.sender) + minAmountOut);
+        }
+    }
+
+    function badSwapNotSpendingMeetingMinAmountOut(
+        ERC20 tokenIn,
+        uint256 amountIn,
+        ERC20 tokenOut,
+        uint256 minAmountOut
+    ) external payable {
+        if (address(tokenIn) != address(0)) {
+            // Transfer senders tokenIn in.
+            tokenIn.transferFrom(msg.sender, address(this), amountIn);
+        }
+
+        if (address(tokenOut) == address(0)) {
+            deal(msg.sender, msg.sender.balance + minAmountOut - 1);
+        } else {
+            // Mint sender tokenOut
+            deal(address(tokenOut), msg.sender, tokenOut.balanceOf(msg.sender) + minAmountOut - 1);
+        }
+    }
+
+    function badSwapNotSpendingMintingShares(ERC20 tokenIn, uint256 amountIn, ERC20 tokenOut, uint256 minAmountOut)
+        external
+        payable
+    {
+        if (address(tokenIn) != address(0)) {
+            // Transfer senders tokenIn in.
+            tokenIn.transferFrom(msg.sender, address(this), amountIn);
+        }
+
+        if (address(tokenOut) == address(0)) {
+            deal(msg.sender, msg.sender.balance + minAmountOut);
+        } else {
+            // Mint sender tokenOut
+            deal(address(tokenOut), msg.sender, tokenOut.balanceOf(msg.sender) + minAmountOut);
+        }
+
+        boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1);
     }
 }

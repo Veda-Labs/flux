@@ -38,6 +38,9 @@ abstract contract FluxManager is Auth {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     uint16 internal constant BPS_SCALE = 10_000;
+    uint16 internal constant MIN_DATUM_BOUND = 0.9e4;
+    uint16 internal constant MAX_DATUM_BOUND = 1.1e4;
+    uint16 internal constant MAX_PERFORMANCE_FEE = 0.3e4;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STATE                              */
@@ -48,7 +51,6 @@ abstract contract FluxManager is Auth {
      */
     bool public isPaused;
 
-    // TODO add setters
     IDatum public datum;
     uint16 public datumLowerBound;
     uint16 public datumUpperBound;
@@ -71,6 +73,8 @@ abstract contract FluxManager is Auth {
     error FluxManager__WrongMetric();
     error FluxManager__NotImplemented();
     error FluxManager__TooSoon();
+    error FluxManager__BadDatumBounds();
+    error FluxManager__BadPerformanceFee();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         EVENTS                             */
@@ -98,7 +102,7 @@ abstract contract FluxManager is Auth {
     uint8 internal immutable decimals0;
     uint8 internal immutable decimals1;
     uint8 internal immutable decimalsBoring;
-    bool internal immutable baseIn0Or1; // Only used for initial share price when zero shares outstanding
+    bool internal immutable baseIn0Or1; // Only used for initial share price when zero shares outstanding, and for totalAssets check
     address internal immutable nativeWrapper;
 
     constructor(
@@ -121,11 +125,13 @@ abstract contract FluxManager is Auth {
         baseIn0Or1 = _baseIn0Or1;
         nativeWrapper = _nativeWrapper;
         datum = IDatum(_datum);
-        // TODO validate these
+
+        if (
+            _datumLowerBound > BPS_SCALE || _datumLowerBound < MIN_DATUM_BOUND || _datumUpperBound < BPS_SCALE
+                || _datumUpperBound > MAX_DATUM_BOUND
+        ) revert FluxManager__BadDatumBounds();
         datumLowerBound = _datumLowerBound;
         datumUpperBound = _datumUpperBound;
-
-        performanceFee = 0.2e4; //TODO make this settable
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -144,6 +150,41 @@ abstract contract FluxManager is Auth {
     function unpause() external requiresAuth {
         isPaused = false;
         emit Unpaused();
+    }
+
+    function resetHighWatermark() external requiresAuth {
+        _resetHighWatermark();
+    }
+
+    function claimFees(bool token0Or1) external requiresAuth {
+        _claimFees(token0Or1);
+    }
+
+    /// @dev if there are pending fees this will forfeit them.
+    function switchPerformanceMetric(PerformanceMetric newMetric, bool token0Or1) external requiresAuth {
+        _claimFees(token0Or1);
+        performanceMetric = newMetric;
+        _refreshInternalFluxAccounting();
+        _resetHighWatermark();
+    }
+
+    function setPayout(address newPayout) external requiresAuth {
+        payout = newPayout;
+    }
+
+    function setPerformanceFee(uint16 fee) external requiresAuth {
+        if (fee > MAX_PERFORMANCE_FEE) revert FluxManager__BadPerformanceFee();
+        performanceFee = fee;
+    }
+
+    function configureDatum(address _datum, uint16 _datumLowerBound, uint16 _datumUpperBound) external requiresAuth {
+        datum = IDatum(_datum);
+        if (
+            _datumLowerBound > BPS_SCALE || _datumLowerBound < MIN_DATUM_BOUND || _datumUpperBound < BPS_SCALE
+                || _datumUpperBound > MAX_DATUM_BOUND
+        ) revert FluxManager__BadDatumBounds();
+        datumLowerBound = _datumLowerBound;
+        datumUpperBound = _datumUpperBound;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -182,26 +223,6 @@ abstract contract FluxManager is Auth {
         totalSupplyLastReview = SafeCast.toUint128(currentTotalSupply);
         // Update lastPerformanceReview
         lastPerformanceReview = uint64(currentTime);
-    }
-
-    function resetHighWatermark() external requiresAuth {
-        _resetHighWatermark();
-    }
-
-    function claimFees(bool token0Or1) external requiresAuth {
-        _claimFees(token0Or1);
-    }
-
-    /// @dev if there are pending fees this will forfeit them.
-    function switchPerformanceMetric(PerformanceMetric newMetric, bool token0Or1) external requiresAuth {
-        _claimFees(token0Or1);
-        performanceMetric = newMetric;
-        _refreshInternalFluxAccounting();
-        _resetHighWatermark();
-    }
-
-    function setPayout(address newPayout) external requiresAuth {
-        payout = newPayout;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -286,29 +307,6 @@ abstract contract FluxManager is Auth {
     function getRateSafe(uint256 exchangeRate, bool quoteIn0Or1) public view returns (uint256) {
         if (isPaused) revert FluxManager__Paused();
         return getRate(exchangeRate, quoteIn0Or1);
-    }
-
-    /// @notice this function SHOULD revert if totalSupply is zero
-    function shareComposition(uint256 exchangeRate)
-        public
-        view
-        checkDatum(exchangeRate)
-        returns (uint256 token0PerShare, uint256 token1PerShare)
-    {
-        uint256 ts = boringVault.totalSupply();
-        (uint256 ta0, uint256 ta1) = _totalAssets(exchangeRate);
-        token0PerShare = ta0.mulDivDown(10 ** decimalsBoring, ts);
-        token1PerShare = ta1.mulDivDown(10 ** decimalsBoring, ts);
-    }
-
-    /// @notice this function SHOULD revert if totalSupply is zero
-    function shareCompositionSafe(uint256 exchangeRate)
-        external
-        view
-        returns (uint256 token0PerShare, uint256 token1PerShare)
-    {
-        if (isPaused) revert FluxManager__Paused();
-        return shareComposition(exchangeRate);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

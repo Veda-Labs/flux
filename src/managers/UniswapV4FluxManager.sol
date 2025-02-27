@@ -37,7 +37,8 @@ contract UniswapV4FluxManager is FluxManager {
         DECREASE_LIQUIDITY,
         COLLECT_FEES,
         SWAP_TOKEN0_FOR_TOKEN1_IN_POOL,
-        SWAP_TOKEN1_FOR_TOKEN0_IN_POOL
+        SWAP_TOKEN1_FOR_TOKEN0_IN_POOL,
+        SWAP_WITH_AGGREGATOR
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -61,8 +62,12 @@ contract UniswapV4FluxManager is FluxManager {
 
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     uint128 internal constant REFERENCE_LIQUIDITY = 1_000_000_000;
+    int24 internal constant MIN_TICK = -887_270;
+    int24 internal constant MAX_TICK = 887_270;
     bytes4 internal constant PERMIT2_APPROVE_SELECTOR =
         bytes4(keccak256(abi.encodePacked("approve(address,address,uint160,uint48)")));
+    uint16 internal constant MIN_REBALANCE_DEVIATION = 0.9e4;
+    uint16 internal constant MAX_REBALANCE_DEVIATION = 1.1e4;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         STATE                              */
@@ -72,6 +77,7 @@ contract UniswapV4FluxManager is FluxManager {
     uint16 public rebalanceDeviationMax;
     int24 public referenceTickLower;
     int24 public referenceTickUpper;
+    address internal aggregator;
 
     uint128 internal token0Balance;
     uint128 internal token1Balance;
@@ -86,6 +92,11 @@ contract UniswapV4FluxManager is FluxManager {
 
     error UniswapV4FluxManager__PositionNotFound();
     error UniswapV4FluxManager__RebalanceDeviation(uint256 result, uint256 min, uint256 max);
+    error UniswapV4FluxManager__RebalanceChangedTotalSupply();
+    error UniswapV4FluxManager__BadReferenceTick();
+    error UniswapV4FluxManager__BadRebalanceDeviation();
+    error UniswapV4FluxManager__SwapAggregatorBadToken0();
+    error UniswapV4FluxManager__SwapAggregatorBadToken1();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       IMMUTABLES                           */
@@ -122,27 +133,46 @@ contract UniswapV4FluxManager is FluxManager {
         positionManager = IPositionManager(_positionManager);
         universalRouter = _universalRouter;
 
-        referenceTickLower = -887_270;
-        referenceTickUpper = 887_270;
+        referenceTickLower = MIN_TICK;
+        referenceTickUpper = MAX_TICK;
 
+        // Set to sensible defaults.
         rebalanceDeviationMin = 0.99e4;
         rebalanceDeviationMax = 1.01e4;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                     FLUX FUNCTIONS                         */
+    /*                    ADMIN FUNCTIONS                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    function setAggregator(address _aggregator) external requiresAuth {
+        aggregator = _aggregator;
+    }
+
     function setReferenceTicks(int24 newLower, int24 newUpper, bool token0Or1) external requiresAuth {
+        if (newLower >= newUpper) {
+            revert UniswapV4FluxManager__BadReferenceTick();
+        }
         _claimFees(token0Or1);
         // Make sure we are using Liquidity Performance Metric
         performanceMetric = PerformanceMetric.LIQUIDITY;
-        // TODO verify lower is lower
         referenceTickLower = newLower;
         referenceTickUpper = newUpper;
         _refreshInternalFluxAccounting();
         _resetHighWatermark();
     }
+
+    function setRebalanceDeviations(uint16 min, uint16 max) external requiresAuth {
+        if (min > BPS_SCALE || min < MIN_REBALANCE_DEVIATION || max < BPS_SCALE || max > MAX_REBALANCE_DEVIATION) {
+            revert UniswapV4FluxManager__BadRebalanceDeviation();
+        }
+        rebalanceDeviationMin = min;
+        rebalanceDeviationMax = max;
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     FLUX FUNCTIONS                         */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Calculates the accumulated liquidity of a reference UniswapV4 position using given exchange rate.
     /// @dev This function determines the liquidity scalar `liquidityScalar` based on the available token balances
@@ -261,16 +291,13 @@ contract UniswapV4FluxManager is FluxManager {
     /*                  STRATEGIST FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    // TODO Add swapping support
-    // UniV4 swapping support
-    // TODO 1inch support
-
     function rebalance(uint256 exchangeRate, Action[] calldata actions)
         external
         checkDatum(exchangeRate)
         requiresAuth
     {
         _refreshInternalFluxAccounting();
+        uint256 totalSupplyBefore = boringVault.totalSupply();
         uint256 totalAssetsInBaseBefore = totalAssets(exchangeRate, baseIn0Or1);
         for (uint256 i; i < actions.length; ++i) {
             Action calldata action = actions[i];
@@ -325,10 +352,17 @@ contract UniswapV4FluxManager is FluxManager {
                 (uint128 amount1In, uint128 minAmount0Out, uint256 deadline) =
                     abi.decode(action.data, (uint128, uint128, uint256));
                 _swapToken0ForToken1InPool(amount1In, minAmount0Out, deadline);
+            } else if (action.kind == ActionKind.SWAP_WITH_AGGREGATOR) {
+                (uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData) =
+                    abi.decode(action.data, (uint256, bool, uint256, bytes));
+                _swapWithAggregator(amount, token0Or1, minAmountOut, swapData);
             }
         }
 
         _refreshInternalFluxAccounting();
+
+        // Make sure totalSupply is constant.
+        if (totalSupplyBefore != boringVault.totalSupply()) revert UniswapV4FluxManager__RebalanceChangedTotalSupply();
 
         // Check rebalance deviation
         uint256 totalAssetsInBaseAfter = totalAssets(exchangeRate, baseIn0Or1);
@@ -528,6 +562,39 @@ contract UniswapV4FluxManager is FluxManager {
         bytes memory swapData = abi.encodeWithSelector(IUniversalRouter.execute.selector, commands, inputs, deadline);
 
         boringVault.manage(universalRouter, swapData, 0);
+    }
+
+    function _swapWithAggregator(uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData)
+        internal
+    {
+        bytes memory approveCalldata = abi.encodeWithSelector(ERC20.approve.selector, aggregator, amount);
+        if (token0Or1) {
+            // Approve the aggregator to spend tokens.
+            if (address(token0) != address(0)) {
+                boringVault.manage(address(token0), approveCalldata, 0);
+            }
+        } else {
+            boringVault.manage(address(token1), approveCalldata, 0);
+        }
+
+        uint256 token0Starting =
+            address(token0) == address(0) ? address(boringVault).balance : token0.balanceOf(address(boringVault));
+        uint256 token1Starting = token1.balanceOf(address(boringVault));
+
+        boringVault.manage(aggregator, swapData, token0Or1 ? amount : 0);
+
+        uint256 token0Ending =
+            address(token0) == address(0) ? address(boringVault).balance : token0.balanceOf(address(boringVault));
+        uint256 token1Ending = token1.balanceOf(address(boringVault));
+
+        // no need to check that entire approval was used as we revert if the input token balance is not decremented by amount.
+        if (token0Or1) {
+            if ((token0Starting - token0Ending) != amount) revert UniswapV4FluxManager__SwapAggregatorBadToken0();
+            if ((token1Ending - token1Starting) < minAmountOut) revert UniswapV4FluxManager__SwapAggregatorBadToken1();
+        } else {
+            if ((token1Starting - token1Ending) != amount) revert UniswapV4FluxManager__SwapAggregatorBadToken1();
+            if ((token0Ending - token0Starting) < minAmountOut) revert UniswapV4FluxManager__SwapAggregatorBadToken0();
+        }
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
