@@ -174,6 +174,8 @@ contract TellerWithMultiAssetSupport is
     event AllowTo(address indexed user);
     event AllowOperator(address indexed user);
 
+    event RateSignerSet(address indexed rateSigner);
+
     // =============================== MODIFIERS ===============================
 
     /**
@@ -210,11 +212,12 @@ contract TellerWithMultiAssetSupport is
     constructor(
         address _owner,
         address _vault,
-        /*address _accountant,*/ address _weth
+        address _rateSigner,
+        address _weth
     ) Auth(_owner, Authority(address(0))) {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
-        //accountant = AccountantWithRateProviders(_accountant);
+        rateSigner = _rateSigner;
         nativeWrapper = WETH(payable(_weth));
     }
 
@@ -355,6 +358,17 @@ contract TellerWithMultiAssetSupport is
         emit AllowOperator(user);
     }
 
+    /**
+     * @notice Set the rate signer address.
+     * @dev Callable by OWNER_ROLE.
+     */
+    function setRateSigner(
+        address _rateSigner
+    ) external requiresAuth {
+        rateSigner = _rateSigner;
+        emit RateSignerSet(_rateSigner);
+    }
+
     // ========================================= BeforeTransferHook FUNCTIONS =========================================
 
     /**
@@ -452,7 +466,7 @@ contract TellerWithMultiAssetSupport is
         uint256 rate,
         uint256 deadline,
         bytes memory sig
-    ) external payable requiresAuth nonReentrant returns (uint256 shares) {
+    ) public payable requiresAuth nonReentrant returns (uint256 shares) {
         Asset memory asset = _beforeDeposit(depositAsset);
 
         address from;
@@ -537,6 +551,31 @@ contract TellerWithMultiAssetSupport is
             shares,
             shareLockPeriod
         );
+    }
+
+    // TODO: make params less ugly w/ structs or otherwise, maybe refactor other parts to make this less ugly too.
+    function dualDeposit(
+        ERC20 depositAsset0,
+        uint256 depositAmount0,
+        uint256 minimumMint0,
+        uint256 rate0,
+        uint256 deadline0,
+        bytes memory sig0,
+        ERC20 depositAsset1,
+        uint256 depositAmount1,
+        uint256 minimumMint1,
+        uint256 rate1,
+        uint256 deadline1,
+        bytes memory sig1
+        )
+        external
+        payable
+        requiresAuth
+        nonReentrant
+        returns (uint256 shares)
+    {
+        shares = deposit(depositAsset0, depositAmount0, minimumMint0, rate0, deadline0, sig0);
+        shares += deposit(depositAsset1, depositAmount1, minimumMint1, rate1, deadline1, sig1);
     }
 
     /**
