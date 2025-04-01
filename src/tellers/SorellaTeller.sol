@@ -4,7 +4,6 @@ pragma solidity 0.8.24;
 import {ERC20} from "@solmate/src/tokens/ERC20.sol";
 import {WETH} from "@solmate/src/tokens/WETH.sol";
 import {BoringVault} from "src/BoringVault.sol";
-//import {AccountantWithRateProviders} from "src/base/Roles/AccountantWithRateProviders.sol";
 import {FixedPointMathLib} from "@solmate/src/utils/FixedPointMathLib.sol";
 import {SafeTransferLib} from "@solmate/src/utils/SafeTransferLib.sol";
 import {BeforeTransferHook} from "src/interfaces/BeforeTransferHook.sol";
@@ -35,6 +34,15 @@ contract TellerWithMultiAssetSupport is
         bool allowDeposits;
         bool allowWithdraws;
         uint16 sharePremium;
+    }
+
+    struct DepositData {
+        ERC20 depositAsset;
+        uint256 depositAmount;
+        uint256 minimumMint;
+        uint256 rate;
+        uint256 deadline;
+        bytes sig;
     }
 
     // ========================================= CONSTANTS =========================================
@@ -80,6 +88,11 @@ contract TellerWithMultiAssetSupport is
      *      deposits are refundable.
      */
     uint64 public shareLockPeriod;
+
+    /**
+     * @notice The maximum length of time after block.timestamp that a signed rate can be valid.
+     */
+    uint64 public maxDeadlinePeriod;
 
     /**
      * @notice Used to pause calls to `deposit` and `depositWithPermit`.
@@ -193,11 +206,6 @@ contract TellerWithMultiAssetSupport is
      * @notice The BoringVault this contract is working with.
      */
     BoringVault public immutable vault;
-
-    /**
-     * @notice The AccountantWithRateProviders this contract is working with.
-     */
-    //AccountantWithRateProviders public immutable accountant;
 
     /**
      * @notice One share of the BoringVault.
@@ -459,26 +467,19 @@ contract TellerWithMultiAssetSupport is
      * @notice Allows users to deposit into the BoringVault, if this contract is not paused.
      * @dev Publicly callable.
      */
-    function deposit(
-        ERC20 depositAsset,
-        uint256 depositAmount,
-        uint256 minimumMint,
-        uint256 rate,
-        uint256 deadline,
-        bytes memory sig
-    ) public payable requiresAuth nonReentrant returns (uint256 shares) {
-        Asset memory asset = _beforeDeposit(depositAsset);
+    function deposit(DepositData memory depositData) public payable requiresAuth nonReentrant returns (uint256 shares) {
+        Asset memory asset = _beforeDeposit(depositData.depositAsset);
 
         address from;
-        if (address(depositAsset) == NATIVE) {
+        if (address(depositData.depositAsset) == NATIVE) {
             if (msg.value == 0)
                 revert TellerWithMultiAssetSupport__ZeroAssets();
             nativeWrapper.deposit{value: msg.value}();
             // Set depositAmount to msg.value.
-            depositAmount = msg.value;
-            nativeWrapper.safeApprove(address(vault), depositAmount);
+            depositData.depositAmount = msg.value;
+            nativeWrapper.safeApprove(address(vault), depositData.depositAmount);
             // Update depositAsset to nativeWrapper.
-            depositAsset = nativeWrapper;
+            depositData.depositAsset = nativeWrapper;
             // Set from to this address since user transferred value.
             from = address(this);
         } else {
@@ -488,20 +489,15 @@ contract TellerWithMultiAssetSupport is
         }
 
         shares = _erc20Deposit(
-            depositAsset,
-            depositAmount,
-            minimumMint,
+            depositData,
             from,
             msg.sender,
-            asset,
-            rate,
-            deadline,
-            sig
+            asset
         );
         _afterPublicDeposit(
             msg.sender,
-            depositAsset,
-            depositAmount,
+            depositData.depositAsset,
+            depositData.depositAmount,
             shares,
             shareLockPeriod
         );
@@ -512,61 +508,40 @@ contract TellerWithMultiAssetSupport is
      * @dev Publicly callable.
      */
     function depositWithPermit(
-        ERC20 depositAsset,
-        uint256 depositAmount,
-        uint256 minimumMint,
+        DepositData memory depositData,
         uint256 permitDeadline,
         uint8 v,
         bytes32 r,
-        bytes32 s,
-        uint256 rate,
-        uint256 deadline,
-        bytes memory sig
+        bytes32 s
     )
         external
         requiresAuth
         nonReentrant
-        revertOnNativeDeposit(address(depositAsset))
+        revertOnNativeDeposit(address(depositData.depositAsset))
         returns (uint256 shares)
     {
-        Asset memory asset = _beforeDeposit(depositAsset);
+        Asset memory asset = _beforeDeposit(depositData.depositAsset);
 
-        _handlePermit(depositAsset, depositAmount, permitDeadline, v, r, s);
+        _handlePermit(depositData.depositAsset, depositData.depositAmount, permitDeadline, v, r, s);
 
         shares = _erc20Deposit(
-            depositAsset,
-            depositAmount,
-            minimumMint,
+            depositData,
             msg.sender,
             msg.sender,
-            asset,
-            rate,
-            deadline,
-            sig
+            asset
         );
         _afterPublicDeposit(
             msg.sender,
-            depositAsset,
-            depositAmount,
+            depositData.depositAsset,
+            depositData.depositAmount,
             shares,
             shareLockPeriod
         );
     }
 
-    // TODO: make params less ugly w/ structs or otherwise, maybe refactor other parts to make this less ugly too.
     function dualDeposit(
-        ERC20 depositAsset0,
-        uint256 depositAmount0,
-        uint256 minimumMint0,
-        uint256 rate0,
-        uint256 deadline0,
-        bytes memory sig0,
-        ERC20 depositAsset1,
-        uint256 depositAmount1,
-        uint256 minimumMint1,
-        uint256 rate1,
-        uint256 deadline1,
-        bytes memory sig1
+        DepositData memory depositData0,
+        DepositData memory depositData1
         )
         external
         payable
@@ -574,8 +549,8 @@ contract TellerWithMultiAssetSupport is
         nonReentrant
         returns (uint256 shares)
     {
-        shares = deposit(depositAsset0, depositAmount0, minimumMint0, rate0, deadline0, sig0);
-        shares += deposit(depositAsset1, depositAmount1, minimumMint1, rate1, deadline1, sig1);
+        shares = deposit(depositData0);
+        shares += deposit(depositData1);
     }
 
     /**
@@ -584,28 +559,18 @@ contract TellerWithMultiAssetSupport is
      * @dev Callable by SOLVER_ROLE.
      */
     function bulkDeposit(
-        ERC20 depositAsset,
-        uint256 depositAmount,
-        uint256 minimumMint,
-        address to,
-        uint256 rate,
-        uint256 deadline,
-        bytes memory sig
+        DepositData memory depositData,
+        address to
     ) external requiresAuth nonReentrant returns (uint256 shares) {
-        Asset memory asset = _beforeDeposit(depositAsset);
+        Asset memory asset = _beforeDeposit(depositData.depositAsset);
 
         shares = _erc20Deposit(
-            depositAsset,
-            depositAmount,
-            minimumMint,
+            depositData,
             msg.sender,
             to,
-            asset,
-            rate,
-            deadline,
-            sig
+            asset
         );
-        emit BulkDeposit(address(depositAsset), depositAmount);
+        emit BulkDeposit(address(depositData.depositAsset), depositData.depositAmount);
     }
 
     /**
@@ -651,36 +616,31 @@ contract TellerWithMultiAssetSupport is
      * @notice Implements a common ERC20 deposit into BoringVault.
      */
     function _erc20Deposit(
-        ERC20 depositAsset,
-        uint256 depositAmount,
-        uint256 minimumMint,
+        DepositData memory depositData,
         address from,
         address to,
-        Asset memory asset,
-        uint256 rate,
-        uint256 deadline,
-        bytes memory sig
+        Asset memory asset
     ) internal returns (uint256 shares) {
-        if (depositAmount == 0)
+        if (depositData.depositAmount == 0)
             revert TellerWithMultiAssetSupport__ZeroAssets();
 
         _verifySignedMessage(
-            address(depositAsset),
+            address(depositData.depositAsset),
             false,
-            depositAmount,
-            rate,
-            deadline,
-            sig
+            depositData.depositAmount,
+            depositData.rate,
+            depositData.deadline,
+            depositData.sig
         );
 
-        shares = depositAmount.mulDivDown(ONE_SHARE, rate);
+        shares = depositData.depositAmount.mulDivDown(ONE_SHARE, depositData.rate); // TODO fix this with getRateSafe
 
         shares = asset.sharePremium > 0
             ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4)
             : shares;
-        if (shares < minimumMint)
+        if (shares < depositData.minimumMint)
             revert TellerWithMultiAssetSupport__MinimumMintNotMet();
-        vault.enter(from, depositAsset, depositAmount, to, shares);
+        vault.enter(from, depositData.depositAsset, depositData.depositAmount, to, shares);
     }
 
     /**
@@ -771,11 +731,10 @@ contract TellerWithMultiAssetSupport is
         uint256 deadline,
         bytes memory sig
     ) internal {
-        // ***MOST OF THIS CAN BE DONE WITHOUT OZ ECDSA LIBRARY INSTEAD***
-        // First, recreate the message hash that was signed:
-        // include all params in addtion to msg.sender
+        // Recreate the signed message and verify the signature
         bytes32 messageHash = keccak256(
             abi.encodePacked(
+                address(this),
                 msg.sender,
                 address(asset),
                 isWithdraw,
@@ -785,24 +744,16 @@ contract TellerWithMultiAssetSupport is
             )
         );
 
-        // Then, recreate the message hash that was signed:
         bytes32 signedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
-        // bytes32 signedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
-
-        // Finally, recover the signer from the signature and message hash and check that the signer is correct
         address signer = ECDSA.recover(signedMessageHash, sig);
-        // address signer = ecrecover(signedMessageHash, v, r, s);
 
-        // Check that the signer is the rate signer
         if (signer != rateSigner)
             revert TellerWithMultiAssetSupport__InvalidRateSigner();
-        // Check that the signature is still valid and has not expired
-        if (block.timestamp > deadline)
+        if (block.timestamp > deadline || deadline > block.timestamp + maxDeadlinePeriod)
             revert TellerWithMultiAssetSupport__SignatureExpired();
-        // Check that the signature has not been used before
         if (usedSignatures[signedMessageHash])
             revert TellerWithMultiAssetSupport__DuplicateSignature();
-        // Mark the signature as used
+        
         usedSignatures[signedMessageHash] = true;
     }
 }
