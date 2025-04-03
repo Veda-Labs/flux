@@ -14,7 +14,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol"; // T
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol"; // TODO: check this
 import {IFluxManager} from "src/interfaces/IFluxManager.sol";
 
-contract TellerWithMultiAssetSupport is
+contract FluxTeller is
     Auth,
     BeforeTransferHook,
     ReentrancyGuard,
