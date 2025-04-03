@@ -12,6 +12,7 @@ import {ReentrancyGuard} from "@solmate/src/utils/ReentrancyGuard.sol";
 import {IPausable} from "src/interfaces/IPausable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol"; // TODO: check this
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol"; // TODO: check this
+import {IFluxManager} from "src/interfaces/IFluxManager.sol";
 
 contract TellerWithMultiAssetSupport is
     Auth,
@@ -70,6 +71,11 @@ contract TellerWithMultiAssetSupport is
      * @notice Signer for exchange rate updates.
      */
     address public rateSigner;
+
+    /**
+     * @notice The Flux Manager associated with this Teller and BoringVault.
+     */
+    IFluxManager public fluxManager;
 
     /**
      * @notice Mapping ERC20s to their assetData.
@@ -221,11 +227,13 @@ contract TellerWithMultiAssetSupport is
         address _owner,
         address _vault,
         address _rateSigner,
+        address _fluxManager,
         address _weth
     ) Auth(_owner, Authority(address(0))) {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
         rateSigner = _rateSigner;
+        fluxManager = IFluxManager(_fluxManager);
         nativeWrapper = WETH(payable(_weth));
     }
 
@@ -602,12 +610,30 @@ contract TellerWithMultiAssetSupport is
             sig
         );
 
-        assetsOut = shareAmount.mulDivDown(rate, ONE_SHARE);
+        assetsOut = shareAmount.mulDivDown(fluxManager.getRateSafe(rate, true), ONE_SHARE); // check rate direction
 
         if (assetsOut < minimumAssets)
             revert TellerWithMultiAssetSupport__MinimumAssetsNotMet();
         vault.exit(to, withdrawAsset, assetsOut, msg.sender, shareAmount);
         emit BulkWithdraw(address(withdrawAsset), shareAmount);
+    }
+
+
+    function cancelSignature( // TODO make sure this is sufficient to cancel and that it is only possible to cancel signatures related to the caller
+        address asset,
+        bool isWithdraw,
+        uint256 amount,
+        uint256 rate,
+        uint256 deadline,
+        bytes memory sig) external requiresAuth {
+        _verifySignedMessage(
+            asset,
+            isWithdraw,
+            amount,
+            rate,
+            deadline,
+            sig
+        );
     }
 
     // ========================================= INTERNAL HELPER FUNCTIONS =========================================
@@ -633,7 +659,7 @@ contract TellerWithMultiAssetSupport is
             depositData.sig
         );
 
-        shares = depositData.depositAmount.mulDivDown(ONE_SHARE, depositData.rate); // TODO fix this with getRateSafe
+        shares = depositData.depositAmount.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, true)); // TODO check rate direction
 
         shares = asset.sharePremium > 0
             ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4)
