@@ -37,8 +37,10 @@ contract SorellaIntentsTeller is
         uint16 sharePremium;
     }
 
-    struct DepositData {
+    struct ActionData {
+        bool isWithdrawal;
         address user;
+        address to;
         ERC20 depositAsset;
         uint256 depositAmount;
         uint256 minimumMint;
@@ -49,11 +51,11 @@ contract SorellaIntentsTeller is
 
     // ========================================= CONSTANTS =========================================
 
-    /**
-     * @notice Native address used to tell the contract to handle native asset deposits.
-     */
-    address internal constant NATIVE =
-        0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    // /**
+    //  * @notice Native address used to tell the contract to handle native asset deposits.
+    //  */
+    // address internal constant NATIVE =
+    //     0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
      * @notice The maximum possible share lock period.
@@ -192,15 +194,6 @@ contract SorellaIntentsTeller is
     event RateSignerSet(address indexed rateSigner);
 
     // =============================== MODIFIERS ===============================
-
-    /**
-     * @notice Reverts if the deposit asset is the native asset.
-     */
-    modifier revertOnNativeDeposit(address depositAsset) {
-        if (depositAsset == NATIVE)
-            revert TellerWithMultiAssetSupport__CannotDepositNative();
-        _;
-    }
 
     //============================== IMMUTABLES ===============================
 
@@ -437,9 +430,9 @@ contract SorellaIntentsTeller is
         delete publicDepositHistory[nonce];
 
         // If deposit used native asset, send user back wrapped native asset.
-        depositAsset = depositAsset == NATIVE
-            ? address(nativeWrapper)
-            : depositAsset;
+        // depositAsset = depositAsset == NATIVE
+        //     ? address(nativeWrapper)
+        //     : depositAsset;
         // Burn shares and refund assets to receiver.
         vault.exit(
             receiver,
@@ -453,36 +446,17 @@ contract SorellaIntentsTeller is
     }
 
     // ========================================= USER FUNCTIONS =========================================
-
+ 
     // TODO: probably remove direct native deposits, force deposits to be in nativeWrapper, then unwrap
     /**
      * @notice Allows users to deposit into the BoringVault, if this contract is not paused.
      * @dev Publicly callable.
      */
-    function deposit(DepositData memory depositData) public payable requiresAuth nonReentrant returns (uint256 shares) {
+    function deposit(ActionData memory depositData) public requiresAuth nonReentrant returns (uint256 shares) {
         Asset memory asset = _beforeDeposit(depositData.depositAsset);
-
-        address from;
-        if (address(depositData.depositAsset) == NATIVE) {
-            if (msg.value == 0)
-                revert TellerWithMultiAssetSupport__ZeroAssets();
-            nativeWrapper.deposit{value: msg.value}();
-            // Set depositAmount to msg.value.
-            depositData.depositAmount = msg.value;
-            nativeWrapper.safeApprove(address(vault), depositData.depositAmount);
-            // Update depositAsset to nativeWrapper.
-            depositData.depositAsset = nativeWrapper;
-            // Set from to this address since user transferred value.
-            from = address(this);
-        } else {
-            if (msg.value > 0)
-                revert TellerWithMultiAssetSupport__DualDeposit();
-            from = msg.sender;
-        }
 
         shares = _erc20Deposit(
             depositData,
-            from, // TODO: check if this needs to change
             asset
         );
         _afterPublicDeposit(
@@ -499,7 +473,7 @@ contract SorellaIntentsTeller is
      * @dev Publicly callable.
      */
     function depositWithPermit(
-        DepositData memory depositData,
+        ActionData memory depositData,
         uint256 permitDeadline,
         uint8 v,
         bytes32 r,
@@ -508,7 +482,6 @@ contract SorellaIntentsTeller is
         external
         requiresAuth
         nonReentrant
-        revertOnNativeDeposit(address(depositData.depositAsset))
         returns (uint256 shares)
     {
         Asset memory asset = _beforeDeposit(depositData.depositAsset);
@@ -517,8 +490,6 @@ contract SorellaIntentsTeller is
 
         shares = _erc20Deposit(
             depositData,
-            msg.sender,
-            msg.sender,
             asset
         );
         _afterPublicDeposit(
@@ -531,8 +502,8 @@ contract SorellaIntentsTeller is
     }
 
     function dualDeposit(
-        DepositData memory depositData0,
-        DepositData memory depositData1
+        ActionData memory depositData0,
+        ActionData memory depositData1
         )
         external
         payable
@@ -545,81 +516,70 @@ contract SorellaIntentsTeller is
     }
 
 
-    // TODO make sure bulk functions work for user signers even if its going to solver
-    /**
-     * @notice Allows on ramp role to deposit into this contract.
-     * @dev Does NOT support native deposits.
-     * @dev Callable by SOLVER_ROLE.
-     */
-    function bulkDeposit(
-        DepositData memory depositData,
-        address to
-    ) external requiresAuth nonReentrant returns (uint256 shares) {
-        Asset memory asset = _beforeDeposit(depositData.depositAsset);
+    // // TODO make sure bulk functions work for user signers even if its going to solver
+    // /**
+    //  * @notice Allows on ramp role to deposit into this contract.
+    //  * @dev Does NOT support native deposits.
+    //  * @dev Callable by SOLVER_ROLE.
+    //  */
+    // function bulkDeposit(
+    //     DepositData memory depositData,
+    //     address to
+    // ) external requiresAuth nonReentrant returns (uint256 shares) {
+    //     Asset memory asset = _beforeDeposit(depositData.depositAsset);
 
-        shares = _erc20Deposit(
-            depositData,
-            msg.sender,
-            to,
-            asset
-        );
-        emit BulkDeposit(address(depositData.depositAsset), depositData.depositAmount);
-    }
+    //     shares = _erc20Deposit(
+    //         depositData,
+    //         msg.sender,
+    //         to,
+    //         asset
+    //     );
+    //     emit BulkDeposit(address(depositData.depositAsset), depositData.depositAmount);
+    // }
 
-    /**
-     * @notice Allows off ramp role to withdraw from this contract.
-     * @dev Callable by SOLVER_ROLE.
-     */
-    function bulkWithdraw(
-        ERC20 withdrawAsset,
-        uint256 shareAmount,
-        uint256 minimumAssets,
-        address to,
-        uint256 rate,
-        uint256 deadline,
-        bytes memory sig
-    ) external requiresAuth returns (uint256 assetsOut) {
-        if (isPaused) revert TellerWithMultiAssetSupport__Paused();
-        Asset memory asset = assetData[withdrawAsset];
-        if (!asset.allowWithdraws)
-            revert TellerWithMultiAssetSupport__AssetNotSupported();
+    // /**
+    //  * @notice Allows off ramp role to withdraw from this contract.
+    //  * @dev Callable by SOLVER_ROLE.
+    //  */
+    // function bulkWithdraw(
+    //     ERC20 withdrawAsset,
+    //     uint256 shareAmount,
+    //     uint256 minimumAssets,
+    //     address to,
+    //     uint256 rate,
+    //     uint256 deadline,
+    //     bytes memory sig
+    // ) external requiresAuth returns (uint256 assetsOut) {
+    //     if (isPaused) revert TellerWithMultiAssetSupport__Paused();
+    //     Asset memory asset = assetData[withdrawAsset];
+    //     if (!asset.allowWithdraws)
+    //         revert TellerWithMultiAssetSupport__AssetNotSupported();
 
-        if (shareAmount == 0) revert TellerWithMultiAssetSupport__ZeroShares();
+    //     if (shareAmount == 0) revert TellerWithMultiAssetSupport__ZeroShares();
 
-        _verifySignedMessage(
-            user, // TODO: check this
-            address(withdrawAsset),
-            true,
-            shareAmount,
-            rate,
-            deadline,
-            sig
-        );
+    //     _verifySignedMessage(
+    //         user, // TODO: figure out how to make user sigs work here
+    //         address(withdrawAsset),
+    //         true,
+    //         shareAmount,
+    //         rate,
+    //         deadline,
+    //         sig
+    //     );
 
-        assetsOut = shareAmount.mulDivDown(fluxManager.getRateSafe(rate, true), ONE_SHARE); // check rate direction
+    //     assetsOut = shareAmount.mulDivDown(fluxManager.getRateSafe(rate, true), ONE_SHARE); // check rate direction
 
-        if (assetsOut < minimumAssets)
-            revert TellerWithMultiAssetSupport__MinimumAssetsNotMet();
-        vault.exit(to, withdrawAsset, assetsOut, msg.sender, shareAmount);
-        emit BulkWithdraw(address(withdrawAsset), shareAmount);
-    }
+    //     if (assetsOut < minimumAssets)
+    //         revert TellerWithMultiAssetSupport__MinimumAssetsNotMet();
+    //     vault.exit(to, withdrawAsset, assetsOut, msg.sender, shareAmount);
+    //     emit BulkWithdraw(address(withdrawAsset), shareAmount);
+    // }
 
-
-    function cancelSignature( // TODO make sure this is sufficient to cancel and that it is only possible to cancel signatures related to the caller
-        address asset,
-        bool isWithdraw,
-        uint256 amount,
-        uint256 rate,
-        uint256 deadline,
-        bytes memory sig) external requiresAuth {
-        _verifySignedMessage(
-            asset,
-            isWithdraw,
-            amount,
-            rate,
-            deadline,
-            sig
-        );
+    // TODO make sure this is sufficient to cancel and that it is only possible to cancel signatures related to the caller
+    function cancelSignature(ActionData memory actionData) external requiresAuth {
+        // revert if the msg.sender is not the signer
+        // TODO: is a second function needed to bypass any checks like deadline?
+        _verifySignedMessage(actionData);
     }
 
     // ========================================= INTERNAL HELPER FUNCTIONS =========================================
@@ -628,21 +588,14 @@ contract SorellaIntentsTeller is
      * @notice Implements a common ERC20 deposit into BoringVault.
      */
     function _erc20Deposit(
-        DepositData memory depositData,
-        address from,
+        ActionData memory depositData,
         Asset memory asset
     ) internal returns (uint256 shares) {
         if (depositData.depositAmount == 0)
             revert TellerWithMultiAssetSupport__ZeroAssets();
-
-        _verifySignedMessage(
-            address(depositData.depositAsset),
-            false,
-            depositData.depositAmount,
-            depositData.rate,
-            depositData.deadline,
-            depositData.sig
-        );
+        if (depositData.isWithdrawal)
+            revert TellerWithMultiAssetSupport__DualDeposit(); // TODO: find better error
+        _verifySignedMessage(depositData);
 
         shares = depositData.depositAmount.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, true)); // TODO check rate direction
 
@@ -651,7 +604,7 @@ contract SorellaIntentsTeller is
             : shares;
         if (shares < depositData.minimumMint)
             revert TellerWithMultiAssetSupport__MinimumMintNotMet();
-        vault.enter(from, depositData.depositAsset, depositData.depositAmount, depositData.user, shares);
+        vault.enter(depositData.user, depositData.depositAsset, depositData.depositAmount, depositData.to, shares);
     }
 
     /**
@@ -735,33 +688,28 @@ contract SorellaIntentsTeller is
     }
 
     function _verifySignedMessage(
-        address user,
-        address asset,
-        bool isWithdraw,
-        uint256 amount,
-        uint256 rate,
-        uint256 deadline,
-        bytes memory sig
+        ActionData memory actionData
     ) internal {
         // Recreate the signed message and verify the signature
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 address(this), // teller
                 msg.sender, // executor
-                address(asset),
-                isWithdraw, // type
-                amount, // amount
-                rate, // exchange rate
-                deadline // deadline
+                actionData.to, // receiver
+                actionData.asset,
+                actionData.isWithdrawal, // type
+                actionData.amount, // amount
+                actionData.rate, // exchange rate TODO: move rate to execution more
+                actionData.deadline // deadline
             )
         );
 
         bytes32 signedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
-        address signer = ECDSA.recover(signedMessageHash, sig);
+        address signer = ECDSA.recover(signedMessageHash, actionData.sig);
 
-        if (signer != user)
+        if (signer != actionData.user)
             revert TellerWithMultiAssetSupport__InvalidRateSigner();
-        if (block.timestamp > deadline || deadline > block.timestamp + maxDeadlinePeriod)
+        if (block.timestamp > actionData.deadline || actionData.deadline > block.timestamp + maxDeadlinePeriod)
             revert TellerWithMultiAssetSupport__SignatureExpired();
         if (usedSignatures[signedMessageHash])
             revert TellerWithMultiAssetSupport__DuplicateSignature();
