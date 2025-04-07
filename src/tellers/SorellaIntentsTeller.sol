@@ -41,9 +41,9 @@ contract SorellaIntentsTeller is
         bool isWithdrawal;
         address user;
         address to;
-        ERC20 depositAsset;
-        uint256 depositAmount;
-        uint256 minimumMint;
+        ERC20 asset;
+        uint256 amount;
+        uint256 minimumOut;
         uint256 rate;
         uint256 deadline;
         bytes sig;
@@ -157,6 +157,7 @@ contract SorellaIntentsTeller is
     error TellerWithMultiAssetSupport__InvalidRateSigner();
     error TellerWithMultiAssetSupport__DuplicateSignature();
     error TellerWithMultiAssetSupport__SignatureExpired();
+    error TellerWithMultiAssetSupport__ActionMismatch();
 
     //============================== EVENTS ===============================
 
@@ -453,7 +454,7 @@ contract SorellaIntentsTeller is
      * @dev Publicly callable.
      */
     function deposit(ActionData memory depositData) public requiresAuth nonReentrant returns (uint256 shares) {
-        Asset memory asset = _beforeDeposit(depositData.depositAsset);
+        Asset memory asset = _beforeDeposit(depositData.asset);
 
         shares = _erc20Deposit(
             depositData,
@@ -461,8 +462,8 @@ contract SorellaIntentsTeller is
         );
         _afterPublicDeposit(
             depositData.user,
-            depositData.depositAsset,
-            depositData.depositAmount,
+            depositData.asset,
+            depositData.amount,
             shares,
             shareLockPeriod
         );
@@ -484,9 +485,9 @@ contract SorellaIntentsTeller is
         nonReentrant
         returns (uint256 shares)
     {
-        Asset memory asset = _beforeDeposit(depositData.depositAsset);
+        Asset memory asset = _beforeDeposit(depositData.asset);
 
-        _handlePermit(depositData.depositAsset, depositData.depositAmount, permitDeadline, v, r, s);
+        _handlePermit(depositData.asset, depositData.amount, permitDeadline, v, r, s);
 
         shares = _erc20Deposit(
             depositData,
@@ -494,8 +495,8 @@ contract SorellaIntentsTeller is
         );
         _afterPublicDeposit(
             msg.sender,
-            depositData.depositAsset,
-            depositData.depositAmount,
+            depositData.asset,
+            depositData.amount,
             shares,
             shareLockPeriod
         );
@@ -591,20 +592,20 @@ contract SorellaIntentsTeller is
         ActionData memory depositData,
         Asset memory asset
     ) internal returns (uint256 shares) {
-        if (depositData.depositAmount == 0)
+        if (depositData.amount == 0)
             revert TellerWithMultiAssetSupport__ZeroAssets();
         if (depositData.isWithdrawal)
-            revert TellerWithMultiAssetSupport__DualDeposit(); // TODO: find better error
+            revert TellerWithMultiAssetSupport__ActionMismatch(); // TODO: find better error
         _verifySignedMessage(depositData);
 
-        shares = depositData.depositAmount.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, true)); // TODO check rate direction
+        shares = depositData.amount.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, true)); // TODO check rate direction
 
         shares = asset.sharePremium > 0
             ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4)
             : shares;
-        if (shares < depositData.minimumMint)
+        if (shares < depositData.minimumOut)
             revert TellerWithMultiAssetSupport__MinimumMintNotMet();
-        vault.enter(depositData.user, depositData.depositAsset, depositData.depositAmount, depositData.to, shares);
+        vault.enter(depositData.user, depositData.asset, depositData.amount, depositData.to, shares);
     }
 
     /**
