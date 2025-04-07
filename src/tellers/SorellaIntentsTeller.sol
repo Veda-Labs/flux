@@ -2,7 +2,6 @@
 pragma solidity 0.8.24;
 
 import {ERC20} from "@solmate/src/tokens/ERC20.sol";
-import {WETH} from "@solmate/src/tokens/WETH.sol";
 import {BoringVault} from "src/BoringVault.sol";
 import {FixedPointMathLib} from "@solmate/src/utils/FixedPointMathLib.sol";
 import {SafeTransferLib} from "@solmate/src/utils/SafeTransferLib.sol";
@@ -22,7 +21,6 @@ contract SorellaIntentsTeller is
 {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
-    using SafeTransferLib for WETH;
 
     // ========================================= STRUCTS =========================================
     /**
@@ -202,21 +200,14 @@ contract SorellaIntentsTeller is
      */
     uint256 internal immutable ONE_SHARE;
 
-    /**
-     * @notice The native wrapper contract.
-     */
-    WETH public immutable nativeWrapper;
-
     constructor(
         address _owner,
         address _vault,
-        address _fluxManager,
-        address _weth
+        address _fluxManager
     ) Auth(_owner, Authority(address(0))) {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
         fluxManager = IFluxManager(_fluxManager);
-        nativeWrapper = WETH(payable(_weth));
     }
 
     // ========================================= ADMIN FUNCTIONS =========================================
@@ -424,10 +415,6 @@ contract SorellaIntentsTeller is
         // Delete hash to prevent refund gas.
         delete publicDepositHistory[nonce];
 
-        // If deposit used native asset, send user back wrapped native asset.
-        // depositAsset = depositAsset == NATIVE
-        //     ? address(nativeWrapper)
-        //     : depositAsset;
         // Burn shares and refund assets to receiver.
         vault.exit(
             receiver,
@@ -442,10 +429,10 @@ contract SorellaIntentsTeller is
 
     // ========================================= USER FUNCTIONS =========================================
  
-    // TODO: remove direct native deposits, force deposits to be in nativeWrapper, then unwrap
     /**
      * @notice Allows users to deposit into the BoringVault, if this contract is not paused.
      * @dev Publicly callable.
+     * @dev Does NOT support native deposits.
      */
     function deposit(ActionData memory depositData) public requiresAuth nonReentrant returns (uint256 shares) {
         Asset memory asset = _beforeDeposit(depositData.asset);
@@ -466,6 +453,7 @@ contract SorellaIntentsTeller is
     /**
      * @notice Allows users to deposit into BoringVault using permit.
      * @dev Publicly callable.
+     * @dev Does NOT support native deposits.
      */
     function depositWithPermit(
         ActionData memory depositData,
@@ -528,10 +516,11 @@ contract SorellaIntentsTeller is
         emit BulkDeposit(address(depositData.asset), depositData.amountIn);
     }
 
-    // /**
-    //  * @notice Allows off ramp role to withdraw from this contract.
-    //  * @dev Callable by SOLVER_ROLE.
-    //  */
+    /**
+     * @notice Allows off ramp role to withdraw from this contract.
+     * @dev Callable by SOLVER_ROLE.
+     * @dev Does NOT support native withdrawals.
+     */
     function bulkWithdraw(
         ActionData memory withdrawData
     ) external requiresAuth returns (uint256 assetsOut) {
