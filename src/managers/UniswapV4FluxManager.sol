@@ -9,6 +9,7 @@ import {IV4Router} from "@uni-v4-p/interfaces/IV4Router.sol";
 import {IUniversalRouter} from "src/interfaces/IUniversalRouter.sol";
 import {Actions} from "@uni-v4-p/libraries/Actions.sol";
 import {ERC20} from "@solmate/src/tokens/ERC20.sol";
+import {WETH} from "@solmate/src/tokens/WETH.sol";
 import {FullMath} from "@uni-v4-c/libraries/FullMath.sol";
 import {Commands} from "src/libraries/Commands.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -267,9 +268,7 @@ contract UniswapV4FluxManager is FluxManager {
     /// @notice Refresh internal flux constants.
     /// @dev For Uniswap V4 this is token0 and token1 contract balances
     function _refreshInternalFluxAccounting() internal override {
-        token0Balance = address(token0) == address(0)
-            ? SafeCast.toUint128(address(boringVault).balance)
-            : SafeCast.toUint128(token0.balanceOf(address(boringVault)));
+        token0Balance = SafeCast.toUint128(token0.balanceOf(address(boringVault)));
         token1Balance = SafeCast.toUint128(token1.balanceOf(address(boringVault)));
     }
 
@@ -312,6 +311,7 @@ contract UniswapV4FluxManager is FluxManager {
         requiresAuth
     {
         _refreshInternalFluxAccounting();
+        _unwrapAllNative();
         uint256 totalSupplyBefore = boringVault.totalSupply();
         uint256 totalAssetsInBaseBefore = totalAssets(exchangeRate, baseIn0Or1);
         for (uint256 i; i < actions.length; ++i) {
@@ -373,7 +373,7 @@ contract UniswapV4FluxManager is FluxManager {
                 _swapWithAggregator(amount, token0Or1, minAmountOut, swapData);
             }
         }
-
+        _wrapAllNative();
         _refreshInternalFluxAccounting();
 
         // Make sure totalSupply is constant.
@@ -611,6 +611,20 @@ contract UniswapV4FluxManager is FluxManager {
         } else {
             if ((token1Starting - token1Ending) != amount) revert UniswapV4FluxManager__SwapAggregatorBadToken1();
             if ((token0Ending - token0Starting) < minAmountOut) revert UniswapV4FluxManager__SwapAggregatorBadToken0();
+        }
+    }
+
+    // TODO consider if there is a case for this to have a variable amount
+    function _wrapAllNative() internal {
+        if (address(boringVault).balance != 0){
+            boringVault.manage(nativeWrapper, abi.encodeWithSelector(WETH.deposit.selector), address(boringVault).balance);
+        }
+    }
+
+    function _unwrapAllNative() internal {
+        if (ERC20(nativeWrapper).balanceOf(address(boringVault)) != 0) {
+            // Unwrap all native tokens to the boring vault.
+            boringVault.manage(nativeWrapper, abi.encodeWithSelector(WETH.withdraw.selector, ERC20(nativeWrapper).balanceOf(address(boringVault))), 0);
         }
     }
 
