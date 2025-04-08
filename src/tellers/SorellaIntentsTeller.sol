@@ -13,12 +13,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol"; // T
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol"; // TODO: check this
 import {IFluxManager} from "src/interfaces/IFluxManager.sol";
 
-contract SorellaIntentsTeller is
-    Auth,
-    BeforeTransferHook,
-    ReentrancyGuard,
-    IPausable
-{
+contract SorellaIntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
 
@@ -139,11 +134,7 @@ contract SorellaIntentsTeller is
     error TellerWithMultiAssetSupport__ZeroShares();
     error TellerWithMultiAssetSupport__DualDeposit();
     error TellerWithMultiAssetSupport__Paused();
-    error TellerWithMultiAssetSupport__TransferDenied(
-        address from,
-        address to,
-        address operator
-    );
+    error TellerWithMultiAssetSupport__TransferDenied(address from, address to, address operator);
     error TellerWithMultiAssetSupport__SharePremiumTooLarge();
     error TellerWithMultiAssetSupport__CannotDepositNative();
     error TellerWithMultiAssetSupport__InvalidSigner();
@@ -155,12 +146,7 @@ contract SorellaIntentsTeller is
 
     event Paused();
     event Unpaused();
-    event AssetDataUpdated(
-        address indexed asset,
-        bool allowDeposits,
-        bool allowWithdraws,
-        uint16 sharePremium
-    );
+    event AssetDataUpdated(address indexed asset, bool allowDeposits, bool allowWithdraws, uint16 sharePremium);
     event Deposit(
         uint256 indexed nonce,
         address indexed receiver,
@@ -172,11 +158,7 @@ contract SorellaIntentsTeller is
     );
     event BulkDeposit(address indexed asset, uint256 depositAmount);
     event BulkWithdraw(address indexed asset, uint256 shareAmount);
-    event DepositRefunded(
-        uint256 indexed nonce,
-        bytes32 depositHash,
-        address indexed user
-    );
+    event DepositRefunded(uint256 indexed nonce, bytes32 depositHash, address indexed user);
     event DenyFrom(address indexed user);
     event DenyTo(address indexed user);
     event DenyOperator(address indexed user);
@@ -200,11 +182,7 @@ contract SorellaIntentsTeller is
      */
     uint256 internal immutable ONE_SHARE;
 
-    constructor(
-        address _owner,
-        address _vault,
-        address _fluxManager
-    ) Auth(_owner, Authority(address(0))) {
+    constructor(address _owner, address _vault, address _fluxManager) Auth(_owner, Authority(address(0))) {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
         fluxManager = IFluxManager(_fluxManager);
@@ -235,21 +213,15 @@ contract SorellaIntentsTeller is
      * @dev The accountant must also support pricing this asset, else the `deposit` call will revert.
      * @dev Callable by OWNER_ROLE.
      */
-    function updateAssetData(
-        ERC20 asset,
-        bool allowDeposits,
-        bool allowWithdraws,
-        uint16 sharePremium
-    ) external requiresAuth {
-        if (sharePremium > MAX_SHARE_PREMIUM)
+    function updateAssetData(ERC20 asset, bool allowDeposits, bool allowWithdraws, uint16 sharePremium)
+        external
+        requiresAuth
+    {
+        if (sharePremium > MAX_SHARE_PREMIUM) {
             revert TellerWithMultiAssetSupport__SharePremiumTooLarge();
+        }
         assetData[asset] = Asset(allowDeposits, allowWithdraws, sharePremium);
-        emit AssetDataUpdated(
-            address(asset),
-            allowDeposits,
-            allowWithdraws,
-            sharePremium
-        );
+        emit AssetDataUpdated(address(asset), allowDeposits, allowWithdraws, sharePremium);
     }
 
     /**
@@ -262,8 +234,9 @@ contract SorellaIntentsTeller is
      * @dev Callable by OWNER_ROLE.
      */
     function setShareLockPeriod(uint64 _shareLockPeriod) external requiresAuth {
-        if (_shareLockPeriod > MAX_SHARE_LOCK_PERIOD)
+        if (_shareLockPeriod > MAX_SHARE_LOCK_PERIOD) {
             revert TellerWithMultiAssetSupport__ShareLockPeriodTooLong();
+        }
         shareLockPeriod = _shareLockPeriod;
     }
 
@@ -354,22 +327,13 @@ contract SorellaIntentsTeller is
      * @notice If share lock period is set to zero, then users will be able to mint and transfer in the same tx.
      *         if this behavior is not desired then a share lock period of >=1 should be used.
      */
-    function beforeTransfer(
-        address from,
-        address to,
-        address operator
-    ) public view virtual {
-        if (
-            fromDenyList[from] || toDenyList[to] || operatorDenyList[operator]
-        ) {
-            revert TellerWithMultiAssetSupport__TransferDenied(
-                from,
-                to,
-                operator
-            );
+    function beforeTransfer(address from, address to, address operator) public view virtual {
+        if (fromDenyList[from] || toDenyList[to] || operatorDenyList[operator]) {
+            revert TellerWithMultiAssetSupport__TransferDenied(from, to, operator);
         }
-        if (shareUnlockTime[from] > block.timestamp)
+        if (shareUnlockTime[from] > block.timestamp) {
             revert TellerWithMultiAssetSupport__SharesAreLocked();
+        }
     }
 
     // ========================================= REVERT DEPOSIT FUNCTIONS =========================================
@@ -392,43 +356,30 @@ contract SorellaIntentsTeller is
         uint256 depositTimestamp,
         uint256 shareLockUpPeriodAtTimeOfDeposit
     ) external requiresAuth {
-        if (
-            (block.timestamp - depositTimestamp) >=
-            shareLockUpPeriodAtTimeOfDeposit
-        ) {
+        if ((block.timestamp - depositTimestamp) >= shareLockUpPeriodAtTimeOfDeposit) {
             // Shares are already unlocked, so we can not revert deposit.
             revert TellerWithMultiAssetSupport__SharesAreUnLocked();
         }
         bytes32 depositHash = keccak256(
             abi.encode(
-                receiver,
-                depositAsset,
-                depositAmount,
-                shareAmount,
-                depositTimestamp,
-                shareLockUpPeriodAtTimeOfDeposit
+                receiver, depositAsset, depositAmount, shareAmount, depositTimestamp, shareLockUpPeriodAtTimeOfDeposit
             )
         );
-        if (publicDepositHistory[nonce] != depositHash)
+        if (publicDepositHistory[nonce] != depositHash) {
             revert TellerWithMultiAssetSupport__BadDepositHash();
+        }
 
         // Delete hash to prevent refund gas.
         delete publicDepositHistory[nonce];
 
         // Burn shares and refund assets to receiver.
-        vault.exit(
-            receiver,
-            ERC20(depositAsset),
-            depositAmount,
-            receiver,
-            shareAmount
-        );
+        vault.exit(receiver, ERC20(depositAsset), depositAmount, receiver, shareAmount);
 
         emit DepositRefunded(nonce, depositHash, receiver);
     }
 
     // ========================================= USER FUNCTIONS =========================================
- 
+
     /**
      * @notice Allows users to deposit into the BoringVault, if this contract is not paused.
      * @dev Publicly callable.
@@ -437,17 +388,8 @@ contract SorellaIntentsTeller is
     function deposit(ActionData memory depositData) public requiresAuth nonReentrant returns (uint256 shares) {
         Asset memory asset = _beforeDeposit(depositData.asset);
 
-        shares = _erc20Deposit(
-            depositData,
-            asset
-        );
-        _afterPublicDeposit(
-            depositData.user,
-            depositData.asset,
-            depositData.amountIn,
-            shares,
-            shareLockPeriod
-        );
+        shares = _erc20Deposit(depositData, asset);
+        _afterPublicDeposit(depositData.user, depositData.asset, depositData.amountIn, shares, shareLockPeriod);
     }
 
     /**
@@ -455,13 +397,7 @@ contract SorellaIntentsTeller is
      * @dev Publicly callable.
      * @dev Does NOT support native deposits.
      */
-    function depositWithPermit(
-        ActionData memory depositData,
-        uint256 permitDeadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    )
+    function depositWithPermit(ActionData memory depositData, uint256 permitDeadline, uint8 v, bytes32 r, bytes32 s)
         external
         requiresAuth
         nonReentrant
@@ -469,25 +405,13 @@ contract SorellaIntentsTeller is
     {
         Asset memory asset = _beforeDeposit(depositData.asset);
 
-        _handlePermit(depositData.asset, depositData.amountIn, permitDeadline, v, r, s);
+        _handlePermit(depositData.user, depositData.asset, depositData.amountIn, permitDeadline, v, r, s);
 
-        shares = _erc20Deposit(
-            depositData,
-            asset
-        );
-        _afterPublicDeposit(
-            msg.sender,
-            depositData.asset,
-            depositData.amountIn,
-            shares,
-            shareLockPeriod
-        );
+        shares = _erc20Deposit(depositData, asset);
+        _afterPublicDeposit(msg.sender, depositData.asset, depositData.amountIn, shares, shareLockPeriod);
     }
 
-    function dualDeposit(
-        ActionData memory depositData0,
-        ActionData memory depositData1
-        )
+    function dualDeposit(ActionData memory depositData0, ActionData memory depositData1)
         external
         payable
         requiresAuth
@@ -498,21 +422,15 @@ contract SorellaIntentsTeller is
         shares += deposit(depositData1);
     }
 
-
     /**
      * @notice Allows on ramp role to deposit into this contract.
      * @dev Does NOT support native deposits.
      * @dev Callable by SOLVER_ROLE.
      */
-    function bulkDeposit(
-        ActionData memory depositData
-    ) external requiresAuth nonReentrant returns (uint256 shares) {
+    function bulkDeposit(ActionData memory depositData) external requiresAuth nonReentrant returns (uint256 shares) {
         Asset memory asset = _beforeDeposit(depositData.asset);
 
-        shares = _erc20Deposit(
-            depositData,
-            asset
-        );
+        shares = _erc20Deposit(depositData, asset);
         emit BulkDeposit(address(depositData.asset), depositData.amountIn);
     }
 
@@ -521,27 +439,28 @@ contract SorellaIntentsTeller is
      * @dev Callable by SOLVER_ROLE.
      * @dev Does NOT support native withdrawals.
      */
-    function bulkWithdraw(
-        ActionData memory withdrawData
-    ) external requiresAuth returns (uint256 assetsOut) {
+    function bulkWithdraw(ActionData memory withdrawData) external requiresAuth returns (uint256 assetsOut) {
         if (isPaused) revert TellerWithMultiAssetSupport__Paused();
         Asset memory asset = assetData[withdrawData.asset];
-        if (!asset.allowWithdraws)
+        if (!asset.allowWithdraws) {
             revert TellerWithMultiAssetSupport__AssetNotSupported();
-        
-        if (!withdrawData.isWithdrawal) // revert if the action is not a withdrawal
+        }
+
+        if (
+            !withdrawData.isWithdrawal // revert if the action is not a withdrawal
+        ) {
             revert TellerWithMultiAssetSupport__ActionMismatch();
+        }
 
         if (withdrawData.amountIn == 0) revert TellerWithMultiAssetSupport__ZeroShares();
 
-        _verifySignedMessage(
-            withdrawData
-        );
+        _verifySignedMessage(withdrawData);
 
         assetsOut = withdrawData.amountIn.mulDivDown(fluxManager.getRateSafe(withdrawData.rate, true), ONE_SHARE); // check rate direction
 
-        if (assetsOut < withdrawData.minimumOut)
+        if (assetsOut < withdrawData.minimumOut) {
             revert TellerWithMultiAssetSupport__MinimumAssetsNotMet();
+        }
         vault.exit(withdrawData.to, withdrawData.asset, assetsOut, msg.sender, withdrawData.amountIn);
         emit BulkWithdraw(address(withdrawData.asset), withdrawData.amountIn);
     }
@@ -553,8 +472,9 @@ contract SorellaIntentsTeller is
      */
     function cancelSignature(ActionData memory actionData) external requiresAuth {
         // revert if the msg.sender is not the signer so that users can only cancel their own signatures
-        if(actionData.user != msg.sender)
+        if (actionData.user != msg.sender) {
             revert TellerWithMultiAssetSupport__InvalidSigner();
+        }
         // TODO: is a second function needed to bypass any checks like deadline? -- probably not since there is no need to cancel if deadline has passed
         _verifySignedMessage(actionData);
     }
@@ -564,36 +484,33 @@ contract SorellaIntentsTeller is
     /**
      * @notice Implements a common ERC20 deposit into BoringVault.
      */
-    function _erc20Deposit(
-        ActionData memory depositData,
-        Asset memory asset
-    ) internal returns (uint256 shares) {
-        if (depositData.amountIn == 0)
+    function _erc20Deposit(ActionData memory depositData, Asset memory asset) internal returns (uint256 shares) {
+        if (depositData.amountIn == 0) {
             revert TellerWithMultiAssetSupport__ZeroAssets();
-        if (depositData.isWithdrawal)
-            revert TellerWithMultiAssetSupport__ActionMismatch(); // TODO: find better error
+        }
+        if (depositData.isWithdrawal) {
+            revert TellerWithMultiAssetSupport__ActionMismatch();
+        } // TODO: find better error
         _verifySignedMessage(depositData);
 
         shares = depositData.amountIn.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, true)); // TODO check rate direction
 
-        shares = asset.sharePremium > 0
-            ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4)
-            : shares;
-        if (shares < depositData.minimumOut)
+        shares = asset.sharePremium > 0 ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4) : shares;
+        if (shares < depositData.minimumOut) {
             revert TellerWithMultiAssetSupport__MinimumMintNotMet();
+        }
         vault.enter(depositData.user, depositData.asset, depositData.amountIn, depositData.to, shares);
     }
 
     /**
      * @notice Handle pre-deposit checks.
      */
-    function _beforeDeposit(
-        ERC20 depositAsset
-    ) internal view returns (Asset memory asset) {
+    function _beforeDeposit(ERC20 depositAsset) internal view returns (Asset memory asset) {
         if (isPaused) revert TellerWithMultiAssetSupport__Paused();
         asset = assetData[depositAsset];
-        if (!asset.allowDeposits)
+        if (!asset.allowDeposits) {
             revert TellerWithMultiAssetSupport__AssetNotSupported();
+        }
     }
 
     /**
@@ -612,31 +529,17 @@ contract SorellaIntentsTeller is
         if (currentShareLockPeriod > 0) {
             shareUnlockTime[user] = block.timestamp + currentShareLockPeriod;
             publicDepositHistory[nonce] = keccak256(
-                abi.encode(
-                    user,
-                    depositAsset,
-                    depositAmount,
-                    shares,
-                    block.timestamp,
-                    currentShareLockPeriod
-                )
+                abi.encode(user, depositAsset, depositAmount, shares, block.timestamp, currentShareLockPeriod)
             );
         }
-        emit Deposit(
-            nonce,
-            user,
-            address(depositAsset),
-            depositAmount,
-            shares,
-            block.timestamp,
-            currentShareLockPeriod
-        );
+        emit Deposit(nonce, user, address(depositAsset), depositAmount, shares, block.timestamp, currentShareLockPeriod);
     }
 
     /**
      * @notice Handle permit logic.
      */
     function _handlePermit(
+        address user,
         ERC20 depositAsset,
         uint256 depositAmount,
         uint256 deadline,
@@ -644,29 +547,15 @@ contract SorellaIntentsTeller is
         bytes32 r,
         bytes32 s
     ) internal {
-        try
-            depositAsset.permit(
-                msg.sender,
-                address(vault),
-                depositAmount,
-                deadline,
-                v,
-                r,
-                s
-            )
-        {} catch {
-            if (
-                depositAsset.allowance(msg.sender, address(vault)) <
-                depositAmount
-            ) {
+        try depositAsset.permit(user, address(vault), depositAmount, deadline, v, r, s) {}
+        catch {
+            if (depositAsset.allowance(user, address(vault)) < depositAmount) {
                 revert TellerWithMultiAssetSupport__PermitFailedAndAllowanceTooLow();
             }
         }
     }
 
-    function _verifySignedMessage(
-        ActionData memory actionData
-    ) internal {
+    function _verifySignedMessage(ActionData memory actionData) internal {
         // Recreate the signed message and verify the signature
         // Signature does not include rate as rate is specified by executor at execution time
         bytes32 messageHash = keccak256(
@@ -685,13 +574,16 @@ contract SorellaIntentsTeller is
         bytes32 signedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         address signer = ECDSA.recover(signedMessageHash, actionData.sig);
 
-        if (signer != actionData.user)
+        if (signer != actionData.user) {
             revert TellerWithMultiAssetSupport__InvalidSigner();
-        if (block.timestamp > actionData.deadline || actionData.deadline > block.timestamp + maxDeadlinePeriod)
+        }
+        if (block.timestamp > actionData.deadline || actionData.deadline > block.timestamp + maxDeadlinePeriod) {
             revert TellerWithMultiAssetSupport__SignatureExpired();
-        if (usedSignatures[signedMessageHash])
+        }
+        if (usedSignatures[signedMessageHash]) {
             revert TellerWithMultiAssetSupport__DuplicateSignature();
-        
+        }
+
         usedSignatures[signedMessageHash] = true;
     }
 }
