@@ -59,7 +59,6 @@ abstract contract FluxManager is Auth {
     uint16 public performanceFee;
     uint64 public lastPerformanceReview;
     uint64 public performanceReviewFrequency;
-    uint128 highWatermark;
     address public payout;
     uint128 public pendingFee;
     uint128 totalSupplyLastReview;
@@ -82,7 +81,6 @@ abstract contract FluxManager is Auth {
 
     event Paused();
     event Unpaused();
-    event HighWatermarkReset();
     event PerformanceMetricSet();
     event DatumConfigured();
     event PerformanceFeeSet();
@@ -156,10 +154,6 @@ abstract contract FluxManager is Auth {
         emit Unpaused();
     }
 
-    function resetHighWatermark() external requiresAuth {
-        _resetHighWatermark();
-    }
-
     function claimFees(bool token0Or1) external requiresAuth {
         _claimFees(token0Or1);
     }
@@ -169,7 +163,6 @@ abstract contract FluxManager is Auth {
         _claimFees(token0Or1);
         performanceMetric = newMetric;
         _refreshInternalFluxAccounting();
-        _resetHighWatermark();
         emit PerformanceMetricSet();
     }
 
@@ -203,61 +196,9 @@ abstract contract FluxManager is Auth {
         _refreshInternalFluxAccounting();
     }
 
-    /// @dev pending fee is not incorporated into new highWatermark or into totalAssets, to reduce complexity
-    // It can be safely assumed that fees will regularly be taken
-    function reviewPerformance() external requiresAuth {
-        // Make sure we are not paused.
-        if (isPaused) revert FluxManager__Paused();
-
-        // Make sure enough time has passed.
-        uint256 currentTime = block.timestamp;
-        uint256 timeDelta = currentTime - lastPerformanceReview;
-        if (timeDelta < performanceReviewFrequency) revert FluxManager__TooSoon();
-
-        _refreshInternalFluxAccounting();
-
-        (uint256 accumulatedPerShare, uint256 currentHighWatermark, uint256 currentTotalSupply, uint256 feeOwed) =
-            previewPerformance();
-
-        if (accumulatedPerShare > currentHighWatermark) {
-            // Update highWatermark
-            highWatermark = SafeCast.toUint128(accumulatedPerShare);
-        }
-        if (feeOwed > 0) {
-            // Update pendingFee
-            pendingFee += SafeCast.toUint128(feeOwed);
-        }
-        // Update totalSupplyLastReview
-        totalSupplyLastReview = SafeCast.toUint128(currentTotalSupply);
-        // Update lastPerformanceReview
-        lastPerformanceReview = uint64(currentTime);
-    }
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       FLUX VIEW                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    function previewPerformance()
-        public
-        view
-        returns (uint256 accumulatedPerShare, uint256 currentHighWatermark, uint256 currentTotalSupply, uint256 feeOwed)
-    {
-        (accumulatedPerShare, currentTotalSupply) = _getAccumulatedPerShareBasedOffMetric();
-
-        currentHighWatermark = highWatermark;
-        if (accumulatedPerShare > currentHighWatermark) {
-            if (performanceFee > 0) {
-                uint256 delta = accumulatedPerShare - currentHighWatermark;
-                // Use minimum
-                uint256 minShares =
-                    currentTotalSupply > totalSupplyLastReview ? totalSupplyLastReview : currentTotalSupply;
-
-                uint256 performance = delta.mulDivDown(minShares, 10 ** decimalsBoring);
-                // Update pendingFee
-                feeOwed = SafeCast.toUint128(performance.mulDivDown(performanceFee, BPS_SCALE));
-            }
-        }
-    }
 
     // ExchangeRate provided in terms of token1 decimals
     function totalAssets(uint256 exchangeRate, bool quoteIn0Or1)
@@ -350,16 +291,6 @@ abstract contract FluxManager is Auth {
         returns (uint256 /*amount*/ )
     {
         revert FluxManager__NotImplemented();
-    }
-
-    function _resetHighWatermark() internal {
-        (uint256 accumulatedPerShare, uint256 currentTotalSupply) = _getAccumulatedPerShareBasedOffMetric();
-
-        highWatermark = SafeCast.toUint128(accumulatedPerShare);
-        totalSupplyLastReview = SafeCast.toUint128(currentTotalSupply);
-        lastPerformanceReview = uint64(block.timestamp);
-
-        emit HighWatermarkReset();
     }
 
     function _claimFees(bool token0Or1) internal {

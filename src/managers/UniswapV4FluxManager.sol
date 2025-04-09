@@ -170,7 +170,6 @@ contract UniswapV4FluxManager is FluxManager {
         referenceTickLower = newLower;
         referenceTickUpper = newUpper;
         _refreshInternalFluxAccounting();
-        _resetHighWatermark();
 
         emit PerformanceMetricSet();
         emit ReferenceTicksSet();
@@ -385,6 +384,13 @@ contract UniswapV4FluxManager is FluxManager {
         uint256 maxAssets = totalAssetsInBaseBefore.mulDivDown(rebalanceDeviationMax, BPS_SCALE);
         if (totalAssetsInBaseAfter < minAssets || totalAssetsInBaseAfter > maxAssets) {
             revert UniswapV4FluxManager__RebalanceDeviation(totalAssetsInBaseAfter, minAssets, maxAssets);
+        }
+        
+        // Fee Calculations
+        if (totalAssetsInBaseAfter > totalAssetsInBaseBefore) {
+            // We made a profit, need to take fees
+            uint256 profit = totalAssetsInBaseAfter - totalAssetsInBaseBefore;
+            pendingFee += SafeCast.toUint128(profit.mulDivDown(performanceFee, BPS_SCALE));
         }
 
         emit Rebalanced();
