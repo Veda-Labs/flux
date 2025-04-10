@@ -242,18 +242,6 @@ abstract contract FluxManager is Auth {
     /*                     FLUX INTERNAL                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function _totalLiquidity(uint256 /*exchangeRate*/ ) internal view virtual returns (uint256 /*accumulated*/ ) {
-        revert FluxManager__NotImplemented();
-    }
-
-    function _convertLiquidityToToken(uint256, /*exchangeRate*/ uint128, /*liquidity*/ bool /*token0Or1*/ )
-        internal
-        virtual
-        returns (uint256 /*amount*/ )
-    {
-        revert FluxManager__NotImplemented();
-    }
-
     function _claimFees(bool token0Or1) internal {
         uint256 pending = pendingFee;
         if (pending > 0) {
