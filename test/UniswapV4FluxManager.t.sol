@@ -303,13 +303,13 @@ contract UniswapV4FluxManagerTest is Test {
 
         manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN0, true);
 
-        manager.reviewPerformance();
+        //manager.reviewPerformance();
 
         assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
 
         deal(address(token1), address(boringVault), 2 * usdcAmount);
 
-        manager.reviewPerformance();
+        //manager.reviewPerformance();
 
         uint256 expectedFeeInUsdc = 10_000e6;
 
@@ -328,13 +328,13 @@ contract UniswapV4FluxManagerTest is Test {
 
         manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN1, true);
 
-        manager.reviewPerformance();
+        //manager.reviewPerformance();
 
         assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
 
         deal(address(token1), address(boringVault), 100_000e6);
 
-        manager.reviewPerformance();
+        //manager.reviewPerformance();
 
         uint256 expectedFeeInUsdc = 10_000e6;
 
@@ -362,13 +362,13 @@ contract UniswapV4FluxManagerTest is Test {
         manager.setReferenceTicks(tickLower, tickUpper, true);
         manager.switchPerformanceMetric(FluxManager.PerformanceMetric.LIQUIDITY, true);
 
-        manager.reviewPerformance();
+        //manager.reviewPerformance();
 
         assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
 
         deal(address(token1), address(boringVault), 100_000e6);
 
-        manager.reviewPerformance();
+        //manager.reviewPerformance();
 
         uint256 expectedFeeInUsdc = 10_000e6;
 

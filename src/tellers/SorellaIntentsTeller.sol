@@ -9,13 +9,14 @@ import {BeforeTransferHook} from "src/interfaces/BeforeTransferHook.sol";
 import {Auth, Authority} from "@solmate/src/auth/Auth.sol";
 import {ReentrancyGuard} from "@solmate/src/utils/ReentrancyGuard.sol";
 import {IPausable} from "src/interfaces/IPausable.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol"; // TODO: check this
-import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol"; // TODO: check this
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {IFluxManager} from "src/interfaces/IFluxManager.sol";
 
 contract SorellaIntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
+
 
     // ========================================= STRUCTS =========================================
     /**
@@ -382,7 +383,7 @@ contract SorellaIntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPau
 
     /**
      * @notice Allows users to deposit into the BoringVault, if this contract is not paused.
-     * @dev Publicly callable.
+     * @dev Callable by SOLVER_ROLE.
      * @dev Does NOT support native deposits.
      */
     function deposit(ActionData memory depositData) public requiresAuth nonReentrant returns (uint256 shares) {
@@ -394,7 +395,7 @@ contract SorellaIntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPau
 
     /**
      * @notice Allows users to deposit into BoringVault using permit.
-     * @dev Publicly callable.
+     * @dev Callable by SOLVER_ROLE.
      * @dev Does NOT support native deposits.
      */
     function depositWithPermit(ActionData memory depositData, uint256 permitDeadline, uint8 v, bytes32 r, bytes32 s)
@@ -409,17 +410,6 @@ contract SorellaIntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPau
 
         shares = _erc20Deposit(depositData, asset);
         _afterPublicDeposit(msg.sender, depositData.asset, depositData.amountIn, shares, shareLockPeriod);
-    }
-
-    function dualDeposit(ActionData memory depositData0, ActionData memory depositData1)
-        external
-        payable
-        requiresAuth
-        nonReentrant
-        returns (uint256 shares)
-    {
-        shares = deposit(depositData0);
-        shares += deposit(depositData1);
     }
 
     /**
@@ -490,7 +480,7 @@ contract SorellaIntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPau
         }
         if (depositData.isWithdrawal) {
             revert TellerWithMultiAssetSupport__ActionMismatch();
-        } // TODO: find better error
+        }
         _verifySignedMessage(depositData);
 
         shares = depositData.amountIn.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, true)); // TODO check rate direction

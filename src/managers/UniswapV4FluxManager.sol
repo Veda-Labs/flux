@@ -165,13 +165,10 @@ contract UniswapV4FluxManager is FluxManager {
             revert UniswapV4FluxManager__BadReferenceTick();
         }
         _claimFees(token0Or1);
-        // Make sure we are using Liquidity Performance Metric
-        performanceMetric = PerformanceMetric.LIQUIDITY;
         referenceTickLower = newLower;
         referenceTickUpper = newUpper;
         _refreshInternalFluxAccounting();
 
-        emit PerformanceMetricSet();
         emit ReferenceTicksSet();
     }
 
