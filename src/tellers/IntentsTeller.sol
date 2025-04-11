@@ -554,13 +554,13 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         }
     }
 
+    // TODO: confirm that executor can stay out of signature, confirm that nothing else is needed in sig
     function _verifySignedMessage(ActionData memory actionData) internal {
         // Recreate the signed message and verify the signature
         // Signature does not include rate as rate is specified by executor at execution time
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 address(this), // teller
-                msg.sender, // executor
                 actionData.to, // receiver
                 actionData.asset,
                 actionData.isWithdrawal, // type

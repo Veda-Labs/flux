@@ -23,7 +23,6 @@ contract IntentsTellerTest is Test {
     struct SigData {
         uint256 pK;
         address teller;
-        address executor;
         address to;
         address asset;
         bool isWithdrawal;
@@ -77,6 +76,7 @@ contract IntentsTellerTest is Test {
         rolesAuthority.setRoleCapability(
             2, address(boringVault), bytes4(keccak256(abi.encodePacked("exit(address,address,uint256,address,uint256)"))), true
         );
+        
 
         //rolesAuthority.setUserRole(0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9, 1, true);  // TODO: check this
 
@@ -129,6 +129,11 @@ contract IntentsTellerTest is Test {
         //     true
         // );
 
+        // Make Signature Cancellation Public
+        rolesAuthority.setPublicCapability(
+            address(intentsTeller), IntentsTeller.cancelSignature.selector, true
+        );
+
         // Set up test user.
         (testUser0, testUser0Pk) = makeAddrAndKey("testUser0");
         (testUser1, testUser1Pk) = makeAddrAndKey("testUser1");
@@ -143,7 +148,6 @@ contract IntentsTellerTest is Test {
         // Give required approvals.
         vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
-        token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
 
         // Deposit using executor
@@ -159,7 +163,6 @@ contract IntentsTellerTest is Test {
             sig: _generateSignature(SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                address(this),
                 testUser0,
                 address(token1),
                 false,
@@ -181,7 +184,6 @@ contract IntentsTellerTest is Test {
         // Give required approvals.
         vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
-        token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
 
         // Deposit using executor
@@ -197,7 +199,6 @@ contract IntentsTellerTest is Test {
             sig: _generateSignature(SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                address(this),
                 testUser0,
                 address(token1),
                 false,
@@ -221,7 +222,6 @@ contract IntentsTellerTest is Test {
             sig: _generateSignature(SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                address(this),
                 testUser0,
                 address(token1),
                 true,
@@ -235,6 +235,89 @@ contract IntentsTellerTest is Test {
         assertEq(boringVault.balanceOf(testUser0), amount / 2);
     }
 
+    function testCancelDepositSig() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        bytes memory depositSig = _generateSignature(SigData(
+                testUser0Pk,
+                address(intentsTeller),
+                testUser0,
+                address(token1),
+                false,
+                amount,
+                0,
+                block.timestamp + 1 days
+        ));
+
+        IntentsTeller.ActionData memory depositData = IntentsTeller.ActionData({
+            isWithdrawal: false,
+            user: testUser0,
+            to: testUser0,
+            asset: token1,
+            amountIn: amount,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: depositSig
+        });
+
+        // Give required approvals, but cancel the signature
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        intentsTeller.cancelSignature(depositData);
+        vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(
+            abi.encodeWithSelector(IntentsTeller.IntentsTeller__DuplicateSignature.selector)
+        );
+        intentsTeller.deposit(depositData);
+        vm.stopPrank();
+
+        assertEq(boringVault.balanceOf(testUser0), 0);
+    }
+
+    // function testDepositWithPermit() external {
+    //     uint256 amount = 1e18;
+    //     // Fund test user with tokens.
+    //     deal(address(token1), testUser0, amount);
+
+    //     // TODO: Give Permit Sig
+
+    //     // Deposit using executor
+    //     intentsTeller.depositWithPermit(IntentsTeller.ActionData({
+    //         isWithdrawal: false,
+    //         user: testUser0,
+    //         to: testUser0,
+    //         asset: token1,
+    //         amountIn: amount,
+    //         minimumOut: 0,
+    //         rate: 1589835727,
+    //         deadline: block.timestamp + 1 days,
+    //         sig: _generateSignature(SigData(
+    //             testUser0Pk,
+    //             address(intentsTeller),
+    //             address(this),
+    //             testUser0,
+    //             address(token1),
+    //             false,
+    //             amount,
+    //             0,
+    //             block.timestamp + 1 days
+    //         ))
+    //     }),
+    //     block.timestamp + 1 days,
+    //     v,
+    //     r,
+    //     s
+    //     );
+    //     vm.stopPrank();
+
+    //     assertEq(boringVault.balanceOf(testUser0), amount);
+    // }
+
     // ========================================= TESTS FOR FAILURES =========================================
 
     function testDepositFailsActionMismatch() external {
@@ -245,7 +328,6 @@ contract IntentsTellerTest is Test {
         // Give required approvals.
         vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
-        token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
 
         // Deposit using executor
@@ -264,7 +346,6 @@ contract IntentsTellerTest is Test {
             sig: _generateSignature(SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                address(this),
                 testUser0,
                 address(token1),
                 false,
@@ -284,7 +365,6 @@ contract IntentsTellerTest is Test {
         // Give required approvals.
         vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
-        token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
 
         // Deposit using executor
@@ -303,7 +383,6 @@ contract IntentsTellerTest is Test {
             sig: _generateSignature(SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                address(this),
                 testUser0,
                 address(token1),
                 true, // This causes the expected failure
@@ -323,7 +402,6 @@ contract IntentsTellerTest is Test {
         // Give required approvals.
         vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
-        token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
 
         // Deposit using executor
@@ -342,7 +420,6 @@ contract IntentsTellerTest is Test {
             sig: _generateSignature(SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                address(this),
                 testUser0,
                 address(token1),
                 true,
@@ -362,7 +439,6 @@ contract IntentsTellerTest is Test {
         // Give required approvals.
         vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
-        token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
 
         // Deposit using executor
@@ -381,7 +457,6 @@ contract IntentsTellerTest is Test {
             sig: _generateSignature(SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                address(this),
                 testUser0,
                 address(token1),
                 false,
@@ -401,7 +476,6 @@ contract IntentsTellerTest is Test {
         // Give required approvals.
         vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
-        token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
 
         // Deposit using executor
@@ -420,7 +494,6 @@ contract IntentsTellerTest is Test {
             sig: _generateSignature(SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                address(this),
                 testUser0,
                 address(token1),
                 false,
@@ -441,7 +514,7 @@ contract IntentsTellerTest is Test {
     function _generateSignature(
         SigData memory sigData
     ) internal pure returns (bytes memory sig) {
-        bytes32 hash = keccak256(abi.encodePacked(sigData.teller, sigData.executor, sigData.to, sigData.asset, sigData.isWithdrawal, sigData.amountIn, sigData.minimumOut, sigData.deadline));
+        bytes32 hash = keccak256(abi.encodePacked(sigData.teller, sigData.to, sigData.asset, sigData.isWithdrawal, sigData.amountIn, sigData.minimumOut, sigData.deadline));
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(hash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(sigData.pK, digest);
         sig = abi.encodePacked(r, s, v);
