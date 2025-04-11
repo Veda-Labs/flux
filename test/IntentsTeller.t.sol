@@ -46,8 +46,11 @@ contract IntentsTellerTest is Test {
     PoolId internal eth_usdc_pool_id = PoolId.wrap(0x21c67e77068de97969ba93d4aab21826d33ca12bb9f565d8496e8fda8a82ca27);
     address internal ETH_USD_ORACLE = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
 
-    address testUser;
-    uint256 testUserPk;
+    address testUser0;
+    uint256 testUser0Pk;
+
+    address testUser1;
+    uint256 testUser1Pk;
 
     address internal payout = vm.addr(1);
 
@@ -127,17 +130,18 @@ contract IntentsTellerTest is Test {
         // );
 
         // Set up test user.
-        (testUser, testUserPk) = makeAddrAndKey("testUser0");
+        (testUser0, testUser0Pk) = makeAddrAndKey("testUser0");
+        (testUser1, testUser1Pk) = makeAddrAndKey("testUser1");
 
     }
 
     function testDepositSimple() external {
         uint256 amount = 1e18;
         // Fund test user with tokens.
-        deal(address(token1), testUser, amount);
+        deal(address(token1), testUser0, amount);
 
         // Give required approvals.
-        vm.startPrank(address(testUser));
+        vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
         token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
@@ -145,18 +149,18 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(IntentsTeller.ActionData({
             isWithdrawal: false,
-            user: testUser,
-            to: testUser,
+            user: testUser0,
+            to: testUser0,
             asset: token1,
             amountIn: amount,
             minimumOut: 0,
             rate: 1589835727,
             deadline: block.timestamp + 1 days,
             sig: _generateSignature(SigData(
-                testUserPk,
+                testUser0Pk,
                 address(intentsTeller),
                 address(this),
-                testUser,
+                testUser0,
                 address(token1),
                 false,
                 amount,
@@ -166,16 +170,16 @@ contract IntentsTellerTest is Test {
         }));
         vm.stopPrank();
 
-        assertEq(boringVault.balanceOf(testUser), amount);
+        assertEq(boringVault.balanceOf(testUser0), amount);
     }
 
     function testWithdrawSimple() external {
         uint256 amount = 1e18;
         // Fund test user with tokens.
-        deal(address(token1), testUser, amount);
+        deal(address(token1), testUser0, amount);
 
         // Give required approvals.
-        vm.startPrank(address(testUser));
+        vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
         token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
@@ -183,18 +187,18 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(IntentsTeller.ActionData({
             isWithdrawal: false,
-            user: testUser,
-            to: testUser,
+            user: testUser0,
+            to: testUser0,
             asset: token1,
             amountIn: amount,
             minimumOut: 0,
             rate: 1589835727,
             deadline: block.timestamp + 1 days,
             sig: _generateSignature(SigData(
-                testUserPk,
+                testUser0Pk,
                 address(intentsTeller),
                 address(this),
-                testUser,
+                testUser0,
                 address(token1),
                 false,
                 amount,
@@ -207,18 +211,18 @@ contract IntentsTellerTest is Test {
         // Withdraw using executor
         intentsTeller.bulkWithdraw(IntentsTeller.ActionData({
             isWithdrawal: true,
-            user: testUser,
-            to: testUser,
+            user: testUser0,
+            to: testUser0,
             asset: token1,
             amountIn: amount / 2,
             minimumOut: 0,
             rate: 1589835727,
             deadline: block.timestamp + 1 days,
             sig: _generateSignature(SigData(
-                testUserPk,
+                testUser0Pk,
                 address(intentsTeller),
                 address(this),
-                testUser,
+                testUser0,
                 address(token1),
                 true,
                 amount / 2,
@@ -228,7 +232,7 @@ contract IntentsTellerTest is Test {
         }));
         vm.stopPrank();
 
-        assertEq(boringVault.balanceOf(testUser), amount / 2);
+        assertEq(boringVault.balanceOf(testUser0), amount / 2);
     }
 
     // ========================================= TESTS FOR FAILURES =========================================
@@ -236,10 +240,10 @@ contract IntentsTellerTest is Test {
     function testDepositFailsActionMismatch() external {
         uint256 amount = 1e18;
         // Fund test user with tokens.
-        deal(address(token1), testUser, amount);
+        deal(address(token1), testUser0, amount);
 
         // Give required approvals.
-        vm.startPrank(address(testUser));
+        vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
         token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
@@ -250,18 +254,18 @@ contract IntentsTellerTest is Test {
         );
         intentsTeller.deposit(IntentsTeller.ActionData({
             isWithdrawal: true, // This causes the expected failure
-            user: testUser,
-            to: testUser,
+            user: testUser0,
+            to: testUser0,
             asset: token1,
             amountIn: amount,
             minimumOut: 0,
             rate: 1589835727,
             deadline: block.timestamp + 1 days,
             sig: _generateSignature(SigData(
-                testUserPk,
+                testUser0Pk,
                 address(intentsTeller),
                 address(this),
-                testUser,
+                testUser0,
                 address(token1),
                 false,
                 amount,
@@ -275,10 +279,10 @@ contract IntentsTellerTest is Test {
     function testDepositFailsSigActionMismatch() external {
         uint256 amount = 1e18;
         // Fund test user with tokens.
-        deal(address(token1), testUser, amount);
+        deal(address(token1), testUser0, amount);
 
         // Give required approvals.
-        vm.startPrank(address(testUser));
+        vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
         token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
@@ -289,18 +293,18 @@ contract IntentsTellerTest is Test {
         );
         intentsTeller.deposit(IntentsTeller.ActionData({
             isWithdrawal: false,
-            user: testUser,
-            to: testUser,
+            user: testUser0,
+            to: testUser0,
             asset: token1,
             amountIn: amount,
             minimumOut: 0,
             rate: 1589835727,
             deadline: block.timestamp + 1 days,
             sig: _generateSignature(SigData(
-                testUserPk,
+                testUser0Pk,
                 address(intentsTeller),
                 address(this),
-                testUser,
+                testUser0,
                 address(token1),
                 true, // This causes the expected failure
                 amount,
@@ -314,10 +318,10 @@ contract IntentsTellerTest is Test {
     function testDepositFailsAmountMismatch() external {
         uint256 amount = 1e18;
         // Fund test user with tokens.
-        deal(address(token1), testUser, amount);
+        deal(address(token1), testUser0, amount);
 
         // Give required approvals.
-        vm.startPrank(address(testUser));
+        vm.startPrank(address(testUser0));
         token1.approve(address(boringVault), type(uint256).max);
         token1.approve(address(intentsTeller), type(uint256).max);
         vm.stopPrank();
@@ -328,20 +332,98 @@ contract IntentsTellerTest is Test {
         );
         intentsTeller.deposit(IntentsTeller.ActionData({
             isWithdrawal: false,
-            user: testUser,
-            to: testUser,
+            user: testUser0,
+            to: testUser0,
             asset: token1,
             amountIn: amount / 2 ,  // This causes the expected failure
             minimumOut: 0,
             rate: 1589835727,
             deadline: block.timestamp + 1 days,
             sig: _generateSignature(SigData(
-                testUserPk,
+                testUser0Pk,
                 address(intentsTeller),
                 address(this),
-                testUser,
+                testUser0,
                 address(token1),
                 true,
+                amount,
+                0,
+                block.timestamp + 1 days
+            ))
+        }));
+        vm.stopPrank();
+    }
+
+    function testDepositFromOtherUserFails() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        token1.approve(address(intentsTeller), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(
+            abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector)
+        );
+        intentsTeller.deposit(IntentsTeller.ActionData({
+            isWithdrawal: false,
+            user: testUser1, // This causes the failure
+            to: testUser0,
+            asset: token1,
+            amountIn: amount,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: _generateSignature(SigData(
+                testUser0Pk,
+                address(intentsTeller),
+                address(this),
+                testUser0,
+                address(token1),
+                false,
+                amount,
+                0,
+                block.timestamp + 1 days
+            ))
+        }));
+        vm.stopPrank();
+    }
+
+    function testDepositToDifferentUserFails() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        token1.approve(address(intentsTeller), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(
+            abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector)
+        );
+        intentsTeller.deposit(IntentsTeller.ActionData({
+            isWithdrawal: false,
+            user: testUser0,
+            to: testUser1,  // This causes the expected failure
+            asset: token1,
+            amountIn: amount,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: _generateSignature(SigData(
+                testUser0Pk,
+                address(intentsTeller),
+                address(this),
+                testUser0,
+                address(token1),
+                false,
                 amount,
                 0,
                 block.timestamp + 1 days
