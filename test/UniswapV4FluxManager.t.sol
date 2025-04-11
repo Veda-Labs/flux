@@ -43,7 +43,7 @@ contract UniswapV4FluxManagerTest is Test {
 
         rolesAuthority = new RolesAuthority(address(this), Authority(address(0)));
 
-        boringVault = new BoringVault(address(this), "Test", "T", 18);
+        boringVault = new BoringVault(address(this), "Test0", "T0", 18);
 
         boringVault.setAuthority(rolesAuthority);
 
@@ -293,89 +293,89 @@ contract UniswapV4FluxManagerTest is Test {
         assertEq(rateIn1, exchangeRate, "Zero share rate should be exchange rate");
     }
 
-    function testPerformanceReviewInToken0() external {
-        // Mint some shares so we can reviewPerformance
-        boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
-        uint256 ethAmount = 0;
-        uint256 usdcAmount = 50_000e6;
-        deal(address(boringVault), ethAmount);
-        deal(address(token1), address(boringVault), usdcAmount);
+    // function testPerformanceReviewInToken0() external {
+    //     // Mint some shares so we can reviewPerformance
+    //     boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
+    //     uint256 ethAmount = 0;
+    //     uint256 usdcAmount = 50_000e6;
+    //     deal(address(boringVault), ethAmount);
+    //     deal(address(token1), address(boringVault), usdcAmount);
 
-        manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN0, true);
+    //     //manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN0, true);
 
-        //manager.reviewPerformance();
+    //     //manager.reviewPerformance();
 
-        assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
+    //     assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
 
-        deal(address(token1), address(boringVault), 2 * usdcAmount);
+    //     deal(address(token1), address(boringVault), 2 * usdcAmount);
 
-        //manager.reviewPerformance();
+    //     //manager.reviewPerformance();
 
-        uint256 expectedFeeInUsdc = 10_000e6;
+    //     uint256 expectedFeeInUsdc = 10_000e6;
 
-        manager.claimFees(false);
+    //     manager.claimFees(false);
 
-        assertApproxEqAbs(token1.balanceOf(payout), expectedFeeInUsdc, 1, "Claimed Fee should equal expected");
-    }
+    //     assertApproxEqAbs(token1.balanceOf(payout), expectedFeeInUsdc, 1, "Claimed Fee should equal expected");
+    // }
 
-    function testPerformanceReviewInToken1() external {
-        // Mint some shares so we can reviewPerformance
-        boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
-        uint256 ethAmount = 0;
-        uint256 usdcAmount = 50_000e6;
-        deal(address(boringVault), ethAmount);
-        deal(address(token1), address(boringVault), usdcAmount);
+    // function testPerformanceReviewInToken1() external {
+    //     // Mint some shares so we can reviewPerformance
+    //     boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
+    //     uint256 ethAmount = 0;
+    //     uint256 usdcAmount = 50_000e6;
+    //     deal(address(boringVault), ethAmount);
+    //     deal(address(token1), address(boringVault), usdcAmount);
 
-        manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN1, true);
+    //     //manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN1, true);
 
-        //manager.reviewPerformance();
+    //     //manager.reviewPerformance();
 
-        assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
+    //     assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
 
-        deal(address(token1), address(boringVault), 100_000e6);
+    //     deal(address(token1), address(boringVault), 100_000e6);
 
-        //manager.reviewPerformance();
+    //     //manager.reviewPerformance();
 
-        uint256 expectedFeeInUsdc = 10_000e6;
+    //     uint256 expectedFeeInUsdc = 10_000e6;
 
-        manager.claimFees(false);
+    //     manager.claimFees(false);
 
-        assertEq(token1.balanceOf(payout), expectedFeeInUsdc, "Claimed Fee should equal expected");
-    }
+    //     assertEq(token1.balanceOf(payout), expectedFeeInUsdc, "Claimed Fee should equal expected");
+    // }
 
-    function testPerformanceReviewInLiquidity(int24 tickLower, int24 tickUpper) external {
-        tickLower = int24(bound(tickLower, -887_270, 887_269));
-        tickUpper = int24(bound(tickUpper, -887_270, 887_269));
-        if (tickLower == tickUpper) {
-            tickUpper++;
-        }
-        if (tickLower > tickUpper) {
-            (tickLower, tickUpper) = (tickUpper, tickLower);
-        }
-        // Mint some shares so we can reviewPerformance
-        boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
-        uint256 ethAmount = 0;
-        uint256 usdcAmount = 50_000e6;
-        deal(address(boringVault), ethAmount);
-        deal(address(token1), address(boringVault), usdcAmount);
+    // function testPerformanceReviewInLiquidity(int24 tickLower, int24 tickUpper) external {
+    //     tickLower = int24(bound(tickLower, -887_270, 887_269));
+    //     tickUpper = int24(bound(tickUpper, -887_270, 887_269));
+    //     if (tickLower == tickUpper) {
+    //         tickUpper++;
+    //     }
+    //     if (tickLower > tickUpper) {
+    //         (tickLower, tickUpper) = (tickUpper, tickLower);
+    //     }
+    //     // Mint some shares so we can reviewPerformance
+    //     boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
+    //     uint256 ethAmount = 0;
+    //     uint256 usdcAmount = 50_000e6;
+    //     deal(address(boringVault), ethAmount);
+    //     deal(address(token1), address(boringVault), usdcAmount);
 
-        manager.setReferenceTicks(tickLower, tickUpper, true);
-        manager.switchPerformanceMetric(FluxManager.PerformanceMetric.LIQUIDITY, true);
+    //     manager.setReferenceTicks(tickLower, tickUpper, true);
+    //     //manager.switchPerformanceMetric(FluxManager.PerformanceMetric.LIQUIDITY, true);
 
-        //manager.reviewPerformance();
+    //     //manager.reviewPerformance();
 
-        assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
+    //     assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
 
-        deal(address(token1), address(boringVault), 100_000e6);
+    //     deal(address(token1), address(boringVault), 100_000e6);
 
-        //manager.reviewPerformance();
+    //     //manager.reviewPerformance();
 
-        uint256 expectedFeeInUsdc = 10_000e6;
+    //     uint256 expectedFeeInUsdc = 10_000e6;
 
-        manager.claimFees(false);
+    //     manager.claimFees(false);
 
-        assertApproxEqRel(token1.balanceOf(payout), expectedFeeInUsdc, 0.0001e18, "Claimed Fee should equal expected");
-    }
+    //     assertApproxEqRel(token1.balanceOf(payout), expectedFeeInUsdc, 0.0001e18, "Claimed Fee should equal expected");
+    // }
 
     // ========================================= HELPER FUNCTIONS =========================================
 

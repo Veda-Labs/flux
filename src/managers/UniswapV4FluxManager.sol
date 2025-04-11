@@ -189,7 +189,7 @@ contract UniswapV4FluxManager is FluxManager {
     /// @notice Refresh internal flux constants.
     /// @dev For Uniswap V4 this is token0 and token1 contract balances
     function _refreshInternalFluxAccounting() internal override {
-        token0Balance = SafeCast.toUint128(token0.balanceOf(address(boringVault)));
+        token0Balance = address(token0) == address(0) ? SafeCast.toUint128(ERC20(nativeWrapper).balanceOf(address(boringVault))):SafeCast.toUint128(token0.balanceOf(address(boringVault)));
         token1Balance = SafeCast.toUint128(token1.balanceOf(address(boringVault)));
     }
 
