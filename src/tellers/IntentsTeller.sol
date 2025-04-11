@@ -17,7 +17,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
 
-
     // ========================================= STRUCTS =========================================
     /**
      * @param allowDeposits bool indicating whether or not deposits are allowed for this asset.
@@ -184,7 +183,9 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      */
     uint256 internal immutable ONE_SHARE;
 
-    constructor(address _owner, address _vault, address _fluxManager, uint64 _maxDeadlinePeriod) Auth(_owner, Authority(address(0))) {
+    constructor(address _owner, address _vault, address _fluxManager, uint64 _maxDeadlinePeriod)
+        Auth(_owner, Authority(address(0)))
+    {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
         fluxManager = IFluxManager(_fluxManager);

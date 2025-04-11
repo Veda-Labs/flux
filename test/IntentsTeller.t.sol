@@ -71,12 +71,17 @@ contract IntentsTellerTest is Test {
         );
 
         rolesAuthority.setRoleCapability(
-            2, address(boringVault), bytes4(keccak256(abi.encodePacked("enter(address,address,uint256,address,uint256)"))), true
+            2,
+            address(boringVault),
+            bytes4(keccak256(abi.encodePacked("enter(address,address,uint256,address,uint256)"))),
+            true
         );
         rolesAuthority.setRoleCapability(
-            2, address(boringVault), bytes4(keccak256(abi.encodePacked("exit(address,address,uint256,address,uint256)"))), true
+            2,
+            address(boringVault),
+            bytes4(keccak256(abi.encodePacked("exit(address,address,uint256,address,uint256)"))),
+            true
         );
-        
 
         //rolesAuthority.setUserRole(0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9, 1, true);  // TODO: check this
 
@@ -96,12 +101,7 @@ contract IntentsTellerTest is Test {
             universalRouter
         );
 
-        intentsTeller = new IntentsTeller(
-            address(this),
-            address(boringVault),
-            address(manager),
-            86400 * 7
-        );
+        intentsTeller = new IntentsTeller(address(this), address(boringVault), address(manager), 86400 * 7);
 
         intentsTeller.setAuthority(rolesAuthority);
 
@@ -116,11 +116,7 @@ contract IntentsTellerTest is Test {
         intentsTeller.updateAssetData(token1, true, true, 0);
 
         // SET UP ROLES FOR TELLER ON VAULT
-        rolesAuthority.setUserRole(
-            address(intentsTeller),
-            2,
-            true
-        );
+        rolesAuthority.setUserRole(address(intentsTeller), 2, true);
 
         // SET UP ROLES FOR SOLVER ON TELLER
         // rolesAuthority.setUserRole(
@@ -130,14 +126,11 @@ contract IntentsTellerTest is Test {
         // );
 
         // Make Signature Cancellation Public
-        rolesAuthority.setPublicCapability(
-            address(intentsTeller), IntentsTeller.cancelSignature.selector, true
-        );
+        rolesAuthority.setPublicCapability(address(intentsTeller), IntentsTeller.cancelSignature.selector, true);
 
         // Set up test user.
         (testUser0, testUser0Pk) = makeAddrAndKey("testUser0");
         (testUser1, testUser1Pk) = makeAddrAndKey("testUser1");
-
     }
 
     function testDepositSimple() external {
@@ -151,26 +144,30 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        intentsTeller.deposit(IntentsTeller.ActionData({
-            isWithdrawal: false,
-            user: testUser0,
-            to: testUser0,
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp + 1 days,
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                false,
-                amount,
-                0,
-                block.timestamp + 1 days
-            ))
-        }));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
         vm.stopPrank();
 
         assertEq(boringVault.balanceOf(testUser0), amount);
@@ -187,49 +184,57 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        intentsTeller.deposit(IntentsTeller.ActionData({
-            isWithdrawal: false,
-            user: testUser0,
-            to: testUser0,
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp + 1 days,
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                false,
-                amount,
-                0,
-                block.timestamp + 1 days
-            ))
-        }));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
         vm.stopPrank();
 
         // Withdraw using executor
-        intentsTeller.bulkWithdraw(IntentsTeller.ActionData({
-            isWithdrawal: true,
-            user: testUser0,
-            to: testUser0,
-            asset: token1,
-            amountIn: amount / 2,
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp + 1 days,
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                true,
-                amount / 2,
-                0,
-                block.timestamp + 1 days
-            ))
-        }));
+        intentsTeller.bulkWithdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount / 2,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true,
+                        amount / 2,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
         vm.stopPrank();
 
         assertEq(boringVault.balanceOf(testUser0), amount / 2);
@@ -240,7 +245,8 @@ contract IntentsTellerTest is Test {
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
-        bytes memory depositSig = _generateSignature(SigData(
+        bytes memory depositSig = _generateSignature(
+            SigData(
                 testUser0Pk,
                 address(intentsTeller),
                 testUser0,
@@ -249,7 +255,8 @@ contract IntentsTellerTest is Test {
                 amount,
                 0,
                 block.timestamp + 1 days
-        ));
+            )
+        );
 
         IntentsTeller.ActionData memory depositData = IntentsTeller.ActionData({
             isWithdrawal: false,
@@ -270,9 +277,7 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(
-            abi.encodeWithSelector(IntentsTeller.IntentsTeller__DuplicateSignature.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__DuplicateSignature.selector));
         intentsTeller.deposit(depositData);
         vm.stopPrank();
 
@@ -331,29 +336,31 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(
-            abi.encodeWithSelector(IntentsTeller.IntentsTeller__ActionMismatch.selector)
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ActionMismatch.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: true, // This causes the expected failure
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
         );
-        intentsTeller.deposit(IntentsTeller.ActionData({
-            isWithdrawal: true, // This causes the expected failure
-            user: testUser0,
-            to: testUser0,
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp + 1 days,
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                false,
-                amount,
-                0,
-                block.timestamp + 1 days
-            ))
-        }));
         vm.stopPrank();
     }
 
@@ -368,29 +375,31 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(
-            abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector)
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true, // This causes the expected failure
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
         );
-        intentsTeller.deposit(IntentsTeller.ActionData({
-            isWithdrawal: false,
-            user: testUser0,
-            to: testUser0,
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp + 1 days,
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                true, // This causes the expected failure
-                amount,
-                0,
-                block.timestamp + 1 days
-            ))
-        }));
         vm.stopPrank();
     }
 
@@ -405,29 +414,31 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(
-            abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector)
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount / 2, // This causes the expected failure
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
         );
-        intentsTeller.deposit(IntentsTeller.ActionData({
-            isWithdrawal: false,
-            user: testUser0,
-            to: testUser0,
-            asset: token1,
-            amountIn: amount / 2 ,  // This causes the expected failure
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp + 1 days,
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                true,
-                amount,
-                0,
-                block.timestamp + 1 days
-            ))
-        }));
         vm.stopPrank();
     }
 
@@ -442,29 +453,31 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(
-            abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector)
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser1, // This causes the failure
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
         );
-        intentsTeller.deposit(IntentsTeller.ActionData({
-            isWithdrawal: false,
-            user: testUser1, // This causes the failure
-            to: testUser0,
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp + 1 days,
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                false,
-                amount,
-                0,
-                block.timestamp + 1 days
-            ))
-        }));
         vm.stopPrank();
     }
 
@@ -479,29 +492,31 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(
-            abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector)
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser1, // This causes the expected failure
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
         );
-        intentsTeller.deposit(IntentsTeller.ActionData({
-            isWithdrawal: false,
-            user: testUser0,
-            to: testUser1,  // This causes the expected failure
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp + 1 days,
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                false,
-                amount,
-                0,
-                block.timestamp + 1 days
-            ))
-        }));
         vm.stopPrank();
     }
 
@@ -516,29 +531,31 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(
-            abi.encodeWithSelector(IntentsTeller.IntentsTeller__SignatureExpired.selector)
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__SignatureExpired.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp - 1, // This causes the expected failure
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp - 1
+                    )
+                )
+            })
         );
-        intentsTeller.deposit(IntentsTeller.ActionData({
-            isWithdrawal: false,
-            user: testUser0,
-            to: testUser0,
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp - 1, // This causes the expected failure
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                false,
-                amount,
-                0,
-                block.timestamp - 1
-            ))
-        }));
         vm.stopPrank();
     }
 
@@ -553,29 +570,31 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(
-            abi.encodeWithSelector(IntentsTeller.IntentsTeller__DeadlineOutsideMaxPeriod.selector)
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__DeadlineOutsideMaxPeriod.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 7 days + 1, // This causes the expected failure
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 7 days + 1
+                    )
+                )
+            })
         );
-        intentsTeller.deposit(IntentsTeller.ActionData({
-            isWithdrawal: false,
-            user: testUser0,
-            to: testUser0,
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
-            rate: 1589835727,
-            deadline: block.timestamp + 7 days + 1, // This causes the expected failure
-            sig: _generateSignature(SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                testUser0,
-                address(token1),
-                false,
-                amount,
-                0,
-                block.timestamp + 7 days + 1
-            ))
-        }));
         vm.stopPrank();
     }
 
@@ -585,13 +604,20 @@ contract IntentsTellerTest is Test {
         vm.selectFork(forkId);
     }
 
-    function _generateSignature(
-        SigData memory sigData
-    ) internal pure returns (bytes memory sig) {
-        bytes32 hash = keccak256(abi.encodePacked(sigData.teller, sigData.to, sigData.asset, sigData.isWithdrawal, sigData.amountIn, sigData.minimumOut, sigData.deadline));
+    function _generateSignature(SigData memory sigData) internal pure returns (bytes memory sig) {
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                sigData.teller,
+                sigData.to,
+                sigData.asset,
+                sigData.isWithdrawal,
+                sigData.amountIn,
+                sigData.minimumOut,
+                sigData.deadline
+            )
+        );
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(hash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(sigData.pK, digest);
         sig = abi.encodePacked(r, s, v);
     }
-
 }

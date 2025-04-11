@@ -14,12 +14,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol"; // T
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol"; // TODO: check this
 import {IFluxManager} from "src/interfaces/IFluxManager.sol";
 
-contract FluxTeller is
-    Auth,
-    BeforeTransferHook,
-    ReentrancyGuard,
-    IPausable
-{
+contract FluxTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
@@ -51,8 +46,7 @@ contract FluxTeller is
     /**
      * @notice Native address used to tell the contract to handle native asset deposits.
      */
-    address internal constant NATIVE =
-        0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
      * @notice The maximum possible share lock period.
@@ -149,11 +143,7 @@ contract FluxTeller is
     error TellerWithMultiAssetSupport__ZeroShares();
     error TellerWithMultiAssetSupport__DualDeposit();
     error TellerWithMultiAssetSupport__Paused();
-    error TellerWithMultiAssetSupport__TransferDenied(
-        address from,
-        address to,
-        address operator
-    );
+    error TellerWithMultiAssetSupport__TransferDenied(address from, address to, address operator);
     error TellerWithMultiAssetSupport__SharePremiumTooLarge();
     error TellerWithMultiAssetSupport__CannotDepositNative();
     error TellerWithMultiAssetSupport__InvalidRateSigner();
@@ -164,12 +154,7 @@ contract FluxTeller is
 
     event Paused();
     event Unpaused();
-    event AssetDataUpdated(
-        address indexed asset,
-        bool allowDeposits,
-        bool allowWithdraws,
-        uint16 sharePremium
-    );
+    event AssetDataUpdated(address indexed asset, bool allowDeposits, bool allowWithdraws, uint16 sharePremium);
     event Deposit(
         uint256 indexed nonce,
         address indexed receiver,
@@ -181,11 +166,7 @@ contract FluxTeller is
     );
     event BulkDeposit(address indexed asset, uint256 depositAmount);
     event BulkWithdraw(address indexed asset, uint256 shareAmount);
-    event DepositRefunded(
-        uint256 indexed nonce,
-        bytes32 depositHash,
-        address indexed user
-    );
+    event DepositRefunded(uint256 indexed nonce, bytes32 depositHash, address indexed user);
     event DenyFrom(address indexed user);
     event DenyTo(address indexed user);
     event DenyOperator(address indexed user);
@@ -201,8 +182,9 @@ contract FluxTeller is
      * @notice Reverts if the deposit asset is the native asset.
      */
     modifier revertOnNativeDeposit(address depositAsset) {
-        if (depositAsset == NATIVE)
+        if (depositAsset == NATIVE) {
             revert TellerWithMultiAssetSupport__CannotDepositNative();
+        }
         _;
     }
 
@@ -223,13 +205,9 @@ contract FluxTeller is
      */
     WETH public immutable nativeWrapper;
 
-    constructor(
-        address _owner,
-        address _vault,
-        address _rateSigner,
-        address _fluxManager,
-        address _weth
-    ) Auth(_owner, Authority(address(0))) {
+    constructor(address _owner, address _vault, address _rateSigner, address _fluxManager, address _weth)
+        Auth(_owner, Authority(address(0)))
+    {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
         rateSigner = _rateSigner;
@@ -262,21 +240,15 @@ contract FluxTeller is
      * @dev The accountant must also support pricing this asset, else the `deposit` call will revert.
      * @dev Callable by OWNER_ROLE.
      */
-    function updateAssetData(
-        ERC20 asset,
-        bool allowDeposits,
-        bool allowWithdraws,
-        uint16 sharePremium
-    ) external requiresAuth {
-        if (sharePremium > MAX_SHARE_PREMIUM)
+    function updateAssetData(ERC20 asset, bool allowDeposits, bool allowWithdraws, uint16 sharePremium)
+        external
+        requiresAuth
+    {
+        if (sharePremium > MAX_SHARE_PREMIUM) {
             revert TellerWithMultiAssetSupport__SharePremiumTooLarge();
+        }
         assetData[asset] = Asset(allowDeposits, allowWithdraws, sharePremium);
-        emit AssetDataUpdated(
-            address(asset),
-            allowDeposits,
-            allowWithdraws,
-            sharePremium
-        );
+        emit AssetDataUpdated(address(asset), allowDeposits, allowWithdraws, sharePremium);
     }
 
     /**
@@ -289,8 +261,9 @@ contract FluxTeller is
      * @dev Callable by OWNER_ROLE.
      */
     function setShareLockPeriod(uint64 _shareLockPeriod) external requiresAuth {
-        if (_shareLockPeriod > MAX_SHARE_LOCK_PERIOD)
+        if (_shareLockPeriod > MAX_SHARE_LOCK_PERIOD) {
             revert TellerWithMultiAssetSupport__ShareLockPeriodTooLong();
+        }
         shareLockPeriod = _shareLockPeriod;
     }
 
@@ -378,9 +351,7 @@ contract FluxTeller is
      * @notice Set the rate signer address.
      * @dev Callable by OWNER_ROLE.
      */
-    function setRateSigner(
-        address _rateSigner
-    ) external requiresAuth {
+    function setRateSigner(address _rateSigner) external requiresAuth {
         rateSigner = _rateSigner;
         emit RateSignerSet(_rateSigner);
     }
@@ -392,22 +363,13 @@ contract FluxTeller is
      * @notice If share lock period is set to zero, then users will be able to mint and transfer in the same tx.
      *         if this behavior is not desired then a share lock period of >=1 should be used.
      */
-    function beforeTransfer(
-        address from,
-        address to,
-        address operator
-    ) public view virtual {
-        if (
-            fromDenyList[from] || toDenyList[to] || operatorDenyList[operator]
-        ) {
-            revert TellerWithMultiAssetSupport__TransferDenied(
-                from,
-                to,
-                operator
-            );
+    function beforeTransfer(address from, address to, address operator) public view virtual {
+        if (fromDenyList[from] || toDenyList[to] || operatorDenyList[operator]) {
+            revert TellerWithMultiAssetSupport__TransferDenied(from, to, operator);
         }
-        if (shareUnlockTime[from] > block.timestamp)
+        if (shareUnlockTime[from] > block.timestamp) {
             revert TellerWithMultiAssetSupport__SharesAreLocked();
+        }
     }
 
     // ========================================= REVERT DEPOSIT FUNCTIONS =========================================
@@ -430,41 +392,26 @@ contract FluxTeller is
         uint256 depositTimestamp,
         uint256 shareLockUpPeriodAtTimeOfDeposit
     ) external requiresAuth {
-        if (
-            (block.timestamp - depositTimestamp) >=
-            shareLockUpPeriodAtTimeOfDeposit
-        ) {
+        if ((block.timestamp - depositTimestamp) >= shareLockUpPeriodAtTimeOfDeposit) {
             // Shares are already unlocked, so we can not revert deposit.
             revert TellerWithMultiAssetSupport__SharesAreUnLocked();
         }
         bytes32 depositHash = keccak256(
             abi.encode(
-                receiver,
-                depositAsset,
-                depositAmount,
-                shareAmount,
-                depositTimestamp,
-                shareLockUpPeriodAtTimeOfDeposit
+                receiver, depositAsset, depositAmount, shareAmount, depositTimestamp, shareLockUpPeriodAtTimeOfDeposit
             )
         );
-        if (publicDepositHistory[nonce] != depositHash)
+        if (publicDepositHistory[nonce] != depositHash) {
             revert TellerWithMultiAssetSupport__BadDepositHash();
+        }
 
         // Delete hash to prevent refund gas.
         delete publicDepositHistory[nonce];
 
         // If deposit used native asset, send user back wrapped native asset.
-        depositAsset = depositAsset == NATIVE
-            ? address(nativeWrapper)
-            : depositAsset;
+        depositAsset = depositAsset == NATIVE ? address(nativeWrapper) : depositAsset;
         // Burn shares and refund assets to receiver.
-        vault.exit(
-            receiver,
-            ERC20(depositAsset),
-            depositAmount,
-            receiver,
-            shareAmount
-        );
+        vault.exit(receiver, ERC20(depositAsset), depositAmount, receiver, shareAmount);
 
         emit DepositRefunded(nonce, depositHash, receiver);
     }
@@ -475,13 +422,20 @@ contract FluxTeller is
      * @notice Allows users to deposit into the BoringVault, if this contract is not paused.
      * @dev Publicly callable.
      */
-    function deposit(DepositData memory depositData) public payable requiresAuth nonReentrant returns (uint256 shares) {
+    function deposit(DepositData memory depositData)
+        public
+        payable
+        requiresAuth
+        nonReentrant
+        returns (uint256 shares)
+    {
         Asset memory asset = _beforeDeposit(depositData.depositAsset);
 
         address from;
         if (address(depositData.depositAsset) == NATIVE) {
-            if (msg.value == 0)
+            if (msg.value == 0) {
                 revert TellerWithMultiAssetSupport__ZeroAssets();
+            }
             nativeWrapper.deposit{value: msg.value}();
             // Set depositAmount to msg.value.
             depositData.depositAmount = msg.value;
@@ -491,37 +445,21 @@ contract FluxTeller is
             // Set from to this address since user transferred value.
             from = address(this);
         } else {
-            if (msg.value > 0)
+            if (msg.value > 0) {
                 revert TellerWithMultiAssetSupport__DualDeposit();
+            }
             from = msg.sender;
         }
 
-        shares = _erc20Deposit(
-            depositData,
-            from,
-            msg.sender,
-            asset
-        );
-        _afterPublicDeposit(
-            msg.sender,
-            depositData.depositAsset,
-            depositData.depositAmount,
-            shares,
-            shareLockPeriod
-        );
+        shares = _erc20Deposit(depositData, from, msg.sender, asset);
+        _afterPublicDeposit(msg.sender, depositData.depositAsset, depositData.depositAmount, shares, shareLockPeriod);
     }
 
     /**
      * @notice Allows users to deposit into BoringVault using permit.
      * @dev Publicly callable.
      */
-    function depositWithPermit(
-        DepositData memory depositData,
-        uint256 permitDeadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    )
+    function depositWithPermit(DepositData memory depositData, uint256 permitDeadline, uint8 v, bytes32 r, bytes32 s)
         external
         requiresAuth
         nonReentrant
@@ -532,25 +470,11 @@ contract FluxTeller is
 
         _handlePermit(depositData.depositAsset, depositData.depositAmount, permitDeadline, v, r, s);
 
-        shares = _erc20Deposit(
-            depositData,
-            msg.sender,
-            msg.sender,
-            asset
-        );
-        _afterPublicDeposit(
-            msg.sender,
-            depositData.depositAsset,
-            depositData.depositAmount,
-            shares,
-            shareLockPeriod
-        );
+        shares = _erc20Deposit(depositData, msg.sender, msg.sender, asset);
+        _afterPublicDeposit(msg.sender, depositData.depositAsset, depositData.depositAmount, shares, shareLockPeriod);
     }
 
-    function dualDeposit(
-        DepositData memory depositData0,
-        DepositData memory depositData1
-        )
+    function dualDeposit(DepositData memory depositData0, DepositData memory depositData1)
         external
         payable
         requiresAuth
@@ -566,18 +490,15 @@ contract FluxTeller is
      * @dev Does NOT support native deposits.
      * @dev Callable by SOLVER_ROLE.
      */
-    function bulkDeposit(
-        DepositData memory depositData,
-        address to
-    ) external requiresAuth nonReentrant returns (uint256 shares) {
+    function bulkDeposit(DepositData memory depositData, address to)
+        external
+        requiresAuth
+        nonReentrant
+        returns (uint256 shares)
+    {
         Asset memory asset = _beforeDeposit(depositData.depositAsset);
 
-        shares = _erc20Deposit(
-            depositData,
-            msg.sender,
-            to,
-            asset
-        );
+        shares = _erc20Deposit(depositData, msg.sender, to, asset);
         emit BulkDeposit(address(depositData.depositAsset), depositData.depositAmount);
     }
 
@@ -596,44 +517,29 @@ contract FluxTeller is
     ) external requiresAuth returns (uint256 assetsOut) {
         if (isPaused) revert TellerWithMultiAssetSupport__Paused();
         Asset memory asset = assetData[withdrawAsset];
-        if (!asset.allowWithdraws)
+        if (!asset.allowWithdraws) {
             revert TellerWithMultiAssetSupport__AssetNotSupported();
+        }
 
         if (shareAmount == 0) revert TellerWithMultiAssetSupport__ZeroShares();
 
-        _verifySignedMessage(
-            address(withdrawAsset),
-            true,
-            shareAmount,
-            rate,
-            deadline,
-            sig
-        );
+        _verifySignedMessage(address(withdrawAsset), true, shareAmount, rate, deadline, sig);
 
         assetsOut = shareAmount.mulDivDown(fluxManager.getRateSafe(rate, true), ONE_SHARE); // check rate direction
 
-        if (assetsOut < minimumAssets)
+        if (assetsOut < minimumAssets) {
             revert TellerWithMultiAssetSupport__MinimumAssetsNotMet();
+        }
         vault.exit(to, withdrawAsset, assetsOut, msg.sender, shareAmount);
         emit BulkWithdraw(address(withdrawAsset), shareAmount);
     }
 
-
     function cancelSignature( // TODO make sure this is sufficient to cancel and that it is only possible to cancel signatures related to the caller
-        address asset,
-        bool isWithdraw,
-        uint256 amount,
-        uint256 rate,
-        uint256 deadline,
-        bytes memory sig) external requiresAuth {
-        _verifySignedMessage(
-            asset,
-            isWithdraw,
-            amount,
-            rate,
-            deadline,
-            sig
-        );
+    address asset, bool isWithdraw, uint256 amount, uint256 rate, uint256 deadline, bytes memory sig)
+        external
+        requiresAuth
+    {
+        _verifySignedMessage(asset, isWithdraw, amount, rate, deadline, sig);
     }
 
     // ========================================= INTERNAL HELPER FUNCTIONS =========================================
@@ -641,14 +547,13 @@ contract FluxTeller is
     /**
      * @notice Implements a common ERC20 deposit into BoringVault.
      */
-    function _erc20Deposit(
-        DepositData memory depositData,
-        address from,
-        address to,
-        Asset memory asset
-    ) internal returns (uint256 shares) {
-        if (depositData.depositAmount == 0)
+    function _erc20Deposit(DepositData memory depositData, address from, address to, Asset memory asset)
+        internal
+        returns (uint256 shares)
+    {
+        if (depositData.depositAmount == 0) {
             revert TellerWithMultiAssetSupport__ZeroAssets();
+        }
 
         _verifySignedMessage(
             address(depositData.depositAsset),
@@ -661,24 +566,22 @@ contract FluxTeller is
 
         shares = depositData.depositAmount.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, true)); // TODO check rate direction
 
-        shares = asset.sharePremium > 0
-            ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4)
-            : shares;
-        if (shares < depositData.minimumMint)
+        shares = asset.sharePremium > 0 ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4) : shares;
+        if (shares < depositData.minimumMint) {
             revert TellerWithMultiAssetSupport__MinimumMintNotMet();
+        }
         vault.enter(from, depositData.depositAsset, depositData.depositAmount, to, shares);
     }
 
     /**
      * @notice Handle pre-deposit checks.
      */
-    function _beforeDeposit(
-        ERC20 depositAsset
-    ) internal view returns (Asset memory asset) {
+    function _beforeDeposit(ERC20 depositAsset) internal view returns (Asset memory asset) {
         if (isPaused) revert TellerWithMultiAssetSupport__Paused();
         asset = assetData[depositAsset];
-        if (!asset.allowDeposits)
+        if (!asset.allowDeposits) {
             revert TellerWithMultiAssetSupport__AssetNotSupported();
+        }
     }
 
     /**
@@ -697,53 +600,21 @@ contract FluxTeller is
         if (currentShareLockPeriod > 0) {
             shareUnlockTime[user] = block.timestamp + currentShareLockPeriod;
             publicDepositHistory[nonce] = keccak256(
-                abi.encode(
-                    user,
-                    depositAsset,
-                    depositAmount,
-                    shares,
-                    block.timestamp,
-                    currentShareLockPeriod
-                )
+                abi.encode(user, depositAsset, depositAmount, shares, block.timestamp, currentShareLockPeriod)
             );
         }
-        emit Deposit(
-            nonce,
-            user,
-            address(depositAsset),
-            depositAmount,
-            shares,
-            block.timestamp,
-            currentShareLockPeriod
-        );
+        emit Deposit(nonce, user, address(depositAsset), depositAmount, shares, block.timestamp, currentShareLockPeriod);
     }
 
     /**
      * @notice Handle permit logic.
      */
-    function _handlePermit(
-        ERC20 depositAsset,
-        uint256 depositAmount,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) internal {
-        try
-            depositAsset.permit(
-                msg.sender,
-                address(vault),
-                depositAmount,
-                deadline,
-                v,
-                r,
-                s
-            )
-        {} catch {
-            if (
-                depositAsset.allowance(msg.sender, address(vault)) <
-                depositAmount
-            ) {
+    function _handlePermit(ERC20 depositAsset, uint256 depositAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        internal
+    {
+        try depositAsset.permit(msg.sender, address(vault), depositAmount, deadline, v, r, s) {}
+        catch {
+            if (depositAsset.allowance(msg.sender, address(vault)) < depositAmount) {
                 revert TellerWithMultiAssetSupport__PermitFailedAndAllowanceTooLow();
             }
         }
@@ -758,28 +629,22 @@ contract FluxTeller is
         bytes memory sig
     ) internal {
         // Recreate the signed message and verify the signature
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(
-                address(this),
-                msg.sender,
-                address(asset),
-                isWithdraw,
-                amount,
-                rate,
-                deadline
-            )
-        );
+        bytes32 messageHash =
+            keccak256(abi.encodePacked(address(this), msg.sender, address(asset), isWithdraw, amount, rate, deadline));
 
         bytes32 signedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         address signer = ECDSA.recover(signedMessageHash, sig);
 
-        if (signer != rateSigner)
+        if (signer != rateSigner) {
             revert TellerWithMultiAssetSupport__InvalidRateSigner();
-        if (block.timestamp > deadline || deadline > block.timestamp + maxDeadlinePeriod)
+        }
+        if (block.timestamp > deadline || deadline > block.timestamp + maxDeadlinePeriod) {
             revert TellerWithMultiAssetSupport__SignatureExpired();
-        if (usedSignatures[signedMessageHash])
+        }
+        if (usedSignatures[signedMessageHash]) {
             revert TellerWithMultiAssetSupport__DuplicateSignature();
-        
+        }
+
         usedSignatures[signedMessageHash] = true;
     }
 }

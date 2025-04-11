@@ -189,7 +189,9 @@ contract UniswapV4FluxManager is FluxManager {
     /// @notice Refresh internal flux constants.
     /// @dev For Uniswap V4 this is token0 and token1 contract balances
     function _refreshInternalFluxAccounting() internal override {
-        token0Balance = address(token0) == address(0) ? SafeCast.toUint128(ERC20(nativeWrapper).balanceOf(address(boringVault))):SafeCast.toUint128(token0.balanceOf(address(boringVault)));
+        token0Balance = address(token0) == address(0)
+            ? SafeCast.toUint128(ERC20(nativeWrapper).balanceOf(address(boringVault)))
+            : SafeCast.toUint128(token0.balanceOf(address(boringVault)));
         token1Balance = SafeCast.toUint128(token1.balanceOf(address(boringVault)));
     }
 
@@ -307,7 +309,7 @@ contract UniswapV4FluxManager is FluxManager {
         if (totalAssetsInBaseAfter < minAssets || totalAssetsInBaseAfter > maxAssets) {
             revert UniswapV4FluxManager__RebalanceDeviation(totalAssetsInBaseAfter, minAssets, maxAssets);
         }
-        
+
         // Fee Calculations
         if (totalAssetsInBaseAfter > totalAssetsInBaseBefore) {
             // We made a profit, need to take fees
@@ -544,15 +546,21 @@ contract UniswapV4FluxManager is FluxManager {
 
     // TODO consider if there is a case for this to have a variable amount
     function _wrapAllNative() internal {
-        if (address(boringVault).balance != 0){
-            boringVault.manage(nativeWrapper, abi.encodeWithSelector(WETH.deposit.selector), address(boringVault).balance);
+        if (address(boringVault).balance != 0) {
+            boringVault.manage(
+                nativeWrapper, abi.encodeWithSelector(WETH.deposit.selector), address(boringVault).balance
+            );
         }
     }
 
     function _unwrapAllNative() internal {
         if (ERC20(nativeWrapper).balanceOf(address(boringVault)) != 0) {
             // Unwrap all native tokens to the boring vault.
-            boringVault.manage(nativeWrapper, abi.encodeWithSelector(WETH.withdraw.selector, ERC20(nativeWrapper).balanceOf(address(boringVault))), 0);
+            boringVault.manage(
+                nativeWrapper,
+                abi.encodeWithSelector(WETH.withdraw.selector, ERC20(nativeWrapper).balanceOf(address(boringVault))),
+                0
+            );
         }
     }
 
