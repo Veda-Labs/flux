@@ -141,6 +141,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
     error IntentsTeller__InvalidSignature();
     error IntentsTeller__DuplicateSignature();
     error IntentsTeller__SignatureExpired();
+    error IntentsTeller__DeadlineOutsideMaxPeriod();
     error IntentsTeller__ActionMismatch();
 
     //============================== EVENTS ===============================
@@ -576,8 +577,11 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         if (signer != actionData.user) {
             revert IntentsTeller__InvalidSignature();
         }
-        if (block.timestamp > actionData.deadline || actionData.deadline > block.timestamp + maxDeadlinePeriod) {
+        if (block.timestamp > actionData.deadline) {
             revert IntentsTeller__SignatureExpired();
+        }
+        if (actionData.deadline > block.timestamp + maxDeadlinePeriod) {
+            revert IntentsTeller__DeadlineOutsideMaxPeriod();
         }
         if (usedSignatures[signedMessageHash]) {
             revert IntentsTeller__DuplicateSignature();

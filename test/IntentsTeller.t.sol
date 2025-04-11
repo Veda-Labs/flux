@@ -505,6 +505,80 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
     }
 
+    function testDepositFailsDeadlinePassed() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(
+            abi.encodeWithSelector(IntentsTeller.IntentsTeller__SignatureExpired.selector)
+        );
+        intentsTeller.deposit(IntentsTeller.ActionData({
+            isWithdrawal: false,
+            user: testUser0,
+            to: testUser0,
+            asset: token1,
+            amountIn: amount,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp - 1, // This causes the expected failure
+            sig: _generateSignature(SigData(
+                testUser0Pk,
+                address(intentsTeller),
+                testUser0,
+                address(token1),
+                false,
+                amount,
+                0,
+                block.timestamp - 1
+            ))
+        }));
+        vm.stopPrank();
+    }
+
+    function testDepositFailsDeadlineTooFarInFuture() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(
+            abi.encodeWithSelector(IntentsTeller.IntentsTeller__DeadlineOutsideMaxPeriod.selector)
+        );
+        intentsTeller.deposit(IntentsTeller.ActionData({
+            isWithdrawal: false,
+            user: testUser0,
+            to: testUser0,
+            asset: token1,
+            amountIn: amount,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 7 days + 1, // This causes the expected failure
+            sig: _generateSignature(SigData(
+                testUser0Pk,
+                address(intentsTeller),
+                testUser0,
+                address(token1),
+                false,
+                amount,
+                0,
+                block.timestamp + 7 days + 1
+            ))
+        }));
+        vm.stopPrank();
+    }
+
     // ========================================= HELPER FUNCTIONS =========================================
     function _startFork(string memory rpcKey, uint256 blockNumber) internal returns (uint256 forkId) {
         forkId = vm.createFork(vm.envString(rpcKey), blockNumber);
