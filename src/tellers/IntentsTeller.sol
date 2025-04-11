@@ -123,25 +123,25 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
 
     //============================== ERRORS ===============================
 
-    error TellerWithMultiAssetSupport__ShareLockPeriodTooLong();
-    error TellerWithMultiAssetSupport__SharesAreLocked();
-    error TellerWithMultiAssetSupport__SharesAreUnLocked();
-    error TellerWithMultiAssetSupport__BadDepositHash();
-    error TellerWithMultiAssetSupport__AssetNotSupported();
-    error TellerWithMultiAssetSupport__ZeroAssets();
-    error TellerWithMultiAssetSupport__MinimumMintNotMet();
-    error TellerWithMultiAssetSupport__MinimumAssetsNotMet();
-    error TellerWithMultiAssetSupport__PermitFailedAndAllowanceTooLow();
-    error TellerWithMultiAssetSupport__ZeroShares();
-    error TellerWithMultiAssetSupport__DualDeposit();
-    error TellerWithMultiAssetSupport__Paused();
-    error TellerWithMultiAssetSupport__TransferDenied(address from, address to, address operator);
-    error TellerWithMultiAssetSupport__SharePremiumTooLarge();
-    error TellerWithMultiAssetSupport__CannotDepositNative();
-    error TellerWithMultiAssetSupport__InvalidSigner();
-    error TellerWithMultiAssetSupport__DuplicateSignature();
-    error TellerWithMultiAssetSupport__SignatureExpired();
-    error TellerWithMultiAssetSupport__ActionMismatch();
+    error IntentsTeller__ShareLockPeriodTooLong();
+    error IntentsTeller__SharesAreLocked();
+    error IntentsTeller__SharesAreUnLocked();
+    error IntentsTeller__BadDepositHash();
+    error IntentsTeller__AssetNotSupported();
+    error IntentsTeller__ZeroAssets();
+    error IntentsTeller__MinimumMintNotMet();
+    error IntentsTeller__MinimumAssetsNotMet();
+    error IntentsTeller__PermitFailedAndAllowanceTooLow();
+    error IntentsTeller__ZeroShares();
+    error IntentsTeller__DualDeposit();
+    error IntentsTeller__Paused();
+    error IntentsTeller__TransferDenied(address from, address to, address operator);
+    error IntentsTeller__SharePremiumTooLarge();
+    error IntentsTeller__CannotDepositNative();
+    error IntentsTeller__InvalidSignature();
+    error IntentsTeller__DuplicateSignature();
+    error IntentsTeller__SignatureExpired();
+    error IntentsTeller__ActionMismatch();
 
     //============================== EVENTS ===============================
 
@@ -183,10 +183,11 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      */
     uint256 internal immutable ONE_SHARE;
 
-    constructor(address _owner, address _vault, address _fluxManager) Auth(_owner, Authority(address(0))) {
+    constructor(address _owner, address _vault, address _fluxManager, uint64 _maxDeadlinePeriod) Auth(_owner, Authority(address(0))) {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
         fluxManager = IFluxManager(_fluxManager);
+        maxDeadlinePeriod = uint64(_maxDeadlinePeriod);
     }
 
     // ========================================= ADMIN FUNCTIONS =========================================
@@ -219,7 +220,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         requiresAuth
     {
         if (sharePremium > MAX_SHARE_PREMIUM) {
-            revert TellerWithMultiAssetSupport__SharePremiumTooLarge();
+            revert IntentsTeller__SharePremiumTooLarge();
         }
         assetData[asset] = Asset(allowDeposits, allowWithdraws, sharePremium);
         emit AssetDataUpdated(address(asset), allowDeposits, allowWithdraws, sharePremium);
@@ -236,9 +237,17 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      */
     function setShareLockPeriod(uint64 _shareLockPeriod) external requiresAuth {
         if (_shareLockPeriod > MAX_SHARE_LOCK_PERIOD) {
-            revert TellerWithMultiAssetSupport__ShareLockPeriodTooLong();
+            revert IntentsTeller__ShareLockPeriodTooLong();
         }
         shareLockPeriod = _shareLockPeriod;
+    }
+
+    /**
+     * @notice Sets the maximum deadline period for signed messages.
+     * @dev Callable by OWNER_ROLE.
+     */
+    function setMaxDeadlinePeriod(uint64 _maxDeadlinePeriod) external requiresAuth {
+        maxDeadlinePeriod = _maxDeadlinePeriod;
     }
 
     /**
@@ -330,10 +339,10 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      */
     function beforeTransfer(address from, address to, address operator) public view virtual {
         if (fromDenyList[from] || toDenyList[to] || operatorDenyList[operator]) {
-            revert TellerWithMultiAssetSupport__TransferDenied(from, to, operator);
+            revert IntentsTeller__TransferDenied(from, to, operator);
         }
         if (shareUnlockTime[from] > block.timestamp) {
-            revert TellerWithMultiAssetSupport__SharesAreLocked();
+            revert IntentsTeller__SharesAreLocked();
         }
     }
 
@@ -359,7 +368,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
     ) external requiresAuth {
         if ((block.timestamp - depositTimestamp) >= shareLockUpPeriodAtTimeOfDeposit) {
             // Shares are already unlocked, so we can not revert deposit.
-            revert TellerWithMultiAssetSupport__SharesAreUnLocked();
+            revert IntentsTeller__SharesAreUnLocked();
         }
         bytes32 depositHash = keccak256(
             abi.encode(
@@ -367,7 +376,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
             )
         );
         if (publicDepositHistory[nonce] != depositHash) {
-            revert TellerWithMultiAssetSupport__BadDepositHash();
+            revert IntentsTeller__BadDepositHash();
         }
 
         // Delete hash to prevent refund gas.
@@ -430,28 +439,28 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @dev Does NOT support native withdrawals.
      */
     function bulkWithdraw(ActionData memory withdrawData) external requiresAuth returns (uint256 assetsOut) {
-        if (isPaused) revert TellerWithMultiAssetSupport__Paused();
+        if (isPaused) revert IntentsTeller__Paused();
         Asset memory asset = assetData[withdrawData.asset];
         if (!asset.allowWithdraws) {
-            revert TellerWithMultiAssetSupport__AssetNotSupported();
+            revert IntentsTeller__AssetNotSupported();
         }
 
         if (
             !withdrawData.isWithdrawal // revert if the action is not a withdrawal
         ) {
-            revert TellerWithMultiAssetSupport__ActionMismatch();
+            revert IntentsTeller__ActionMismatch();
         }
 
-        if (withdrawData.amountIn == 0) revert TellerWithMultiAssetSupport__ZeroShares();
+        if (withdrawData.amountIn == 0) revert IntentsTeller__ZeroShares();
 
         _verifySignedMessage(withdrawData);
 
         assetsOut = withdrawData.amountIn.mulDivDown(fluxManager.getRateSafe(withdrawData.rate, true), ONE_SHARE); // check rate direction
 
         if (assetsOut < withdrawData.minimumOut) {
-            revert TellerWithMultiAssetSupport__MinimumAssetsNotMet();
+            revert IntentsTeller__MinimumAssetsNotMet();
         }
-        vault.exit(withdrawData.to, withdrawData.asset, assetsOut, msg.sender, withdrawData.amountIn);
+        vault.exit(withdrawData.to, withdrawData.asset, assetsOut, withdrawData.user, withdrawData.amountIn);
         emit BulkWithdraw(address(withdrawData.asset), withdrawData.amountIn);
     }
 
@@ -463,7 +472,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
     function cancelSignature(ActionData memory actionData) external requiresAuth {
         // revert if the msg.sender is not the signer so that users can only cancel their own signatures
         if (actionData.user != msg.sender) {
-            revert TellerWithMultiAssetSupport__InvalidSigner();
+            revert IntentsTeller__InvalidSignature();
         }
         // TODO: is a second function needed to bypass any checks like deadline? -- probably not since there is no need to cancel if deadline has passed
         _verifySignedMessage(actionData);
@@ -476,10 +485,10 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      */
     function _erc20Deposit(ActionData memory depositData, Asset memory asset) internal returns (uint256 shares) {
         if (depositData.amountIn == 0) {
-            revert TellerWithMultiAssetSupport__ZeroAssets();
+            revert IntentsTeller__ZeroAssets();
         }
         if (depositData.isWithdrawal) {
-            revert TellerWithMultiAssetSupport__ActionMismatch();
+            revert IntentsTeller__ActionMismatch();
         }
         _verifySignedMessage(depositData);
 
@@ -487,7 +496,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
 
         shares = asset.sharePremium > 0 ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4) : shares;
         if (shares < depositData.minimumOut) {
-            revert TellerWithMultiAssetSupport__MinimumMintNotMet();
+            revert IntentsTeller__MinimumMintNotMet();
         }
         vault.enter(depositData.user, depositData.asset, depositData.amountIn, depositData.to, shares);
     }
@@ -496,10 +505,10 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @notice Handle pre-deposit checks.
      */
     function _beforeDeposit(ERC20 depositAsset) internal view returns (Asset memory asset) {
-        if (isPaused) revert TellerWithMultiAssetSupport__Paused();
+        if (isPaused) revert IntentsTeller__Paused();
         asset = assetData[depositAsset];
         if (!asset.allowDeposits) {
-            revert TellerWithMultiAssetSupport__AssetNotSupported();
+            revert IntentsTeller__AssetNotSupported();
         }
     }
 
@@ -540,7 +549,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         try depositAsset.permit(user, address(vault), depositAmount, deadline, v, r, s) {}
         catch {
             if (depositAsset.allowance(user, address(vault)) < depositAmount) {
-                revert TellerWithMultiAssetSupport__PermitFailedAndAllowanceTooLow();
+                revert IntentsTeller__PermitFailedAndAllowanceTooLow();
             }
         }
     }
@@ -565,13 +574,13 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         address signer = ECDSA.recover(signedMessageHash, actionData.sig);
 
         if (signer != actionData.user) {
-            revert TellerWithMultiAssetSupport__InvalidSigner();
+            revert IntentsTeller__InvalidSignature();
         }
         if (block.timestamp > actionData.deadline || actionData.deadline > block.timestamp + maxDeadlinePeriod) {
-            revert TellerWithMultiAssetSupport__SignatureExpired();
+            revert IntentsTeller__SignatureExpired();
         }
         if (usedSignatures[signedMessageHash]) {
-            revert TellerWithMultiAssetSupport__DuplicateSignature();
+            revert IntentsTeller__DuplicateSignature();
         }
 
         usedSignatures[signedMessageHash] = true;

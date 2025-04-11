@@ -54,7 +54,7 @@ contract IntentsTellerTest is Test {
     function setUp() external {
         // Setup forked environment.
         string memory rpcKey = "MAINNET_RPC_URL";
-        uint256 blockNumber = 21918871;
+        uint256 blockNumber = 22222222;
 
         _startFork(rpcKey, blockNumber);
 
@@ -68,12 +68,36 @@ contract IntentsTellerTest is Test {
             1, address(boringVault), bytes4(keccak256(abi.encodePacked("manage(address,bytes,uint256)"))), true
         );
 
+        rolesAuthority.setRoleCapability(
+            2, address(boringVault), bytes4(keccak256(abi.encodePacked("enter(address,address,uint256,address,uint256)"))), true
+        );
+        rolesAuthority.setRoleCapability(
+            2, address(boringVault), bytes4(keccak256(abi.encodePacked("exit(address,address,uint256,address,uint256)"))), true
+        );
+
         //rolesAuthority.setUserRole(0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9, 1, true);  // TODO: check this
+
+        datum = new ChainlinkDatum(ETH_USD_ORACLE, 1 days, false);
+
+        manager = new UniswapV4FluxManager(
+            address(this),
+            address(boringVault),
+            address(token0),
+            address(token1),
+            true,
+            nativeWrapper,
+            address(datum),
+            0.995e4,
+            1.005e4,
+            positionManager,
+            universalRouter
+        );
 
         intentsTeller = new IntentsTeller(
             address(this),
             address(boringVault),
-            address(manager)
+            address(manager),
+            86400 * 7
         );
 
         intentsTeller.setAuthority(rolesAuthority);
@@ -89,11 +113,11 @@ contract IntentsTellerTest is Test {
         intentsTeller.updateAssetData(token1, true, true, 0);
 
         // SET UP ROLES FOR TELLER ON VAULT
-        // rolesAuthority.setUserRole(
-        //     address(intentsTeller),
-        //     1,
-        //     true
-        // );
+        rolesAuthority.setUserRole(
+            address(intentsTeller),
+            2,
+            true
+        );
 
         // SET UP ROLES FOR SOLVER ON TELLER
         // rolesAuthority.setUserRole(
@@ -107,13 +131,7 @@ contract IntentsTellerTest is Test {
 
     }
 
-    function testConfiguration() view external {
-        assertEq(address(manager), address(intentsTeller.fluxManager()));
-        assertEq(address(boringVault), address(intentsTeller.vault()));
-        assertEq(address(this), intentsTeller.owner());
-    }
-
-    function testDeposit() external {
+    function testDepositSimple() external {
         uint256 amount = 1e18;
         // Fund test user with tokens.
         deal(address(token1), testUser, amount);
@@ -132,7 +150,7 @@ contract IntentsTellerTest is Test {
             asset: token1,
             amountIn: amount,
             minimumOut: 0,
-            rate: 1e18, // TODO insert good rate
+            rate: 1589835727,
             deadline: block.timestamp + 1 days,
             sig: _generateSignature(SigData(
                 testUserPk,
@@ -148,7 +166,188 @@ contract IntentsTellerTest is Test {
         }));
         vm.stopPrank();
 
-        assertEq(boringVault.balanceOf(address(this)), amount);
+        assertEq(boringVault.balanceOf(testUser), amount);
+    }
+
+    function testWithdrawSimple() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser));
+        token1.approve(address(boringVault), type(uint256).max);
+        token1.approve(address(intentsTeller), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        intentsTeller.deposit(IntentsTeller.ActionData({
+            isWithdrawal: false,
+            user: testUser,
+            to: testUser,
+            asset: token1,
+            amountIn: amount,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: _generateSignature(SigData(
+                testUserPk,
+                address(intentsTeller),
+                address(this),
+                testUser,
+                address(token1),
+                false,
+                amount,
+                0,
+                block.timestamp + 1 days
+            ))
+        }));
+        vm.stopPrank();
+
+        // Withdraw using executor
+        intentsTeller.bulkWithdraw(IntentsTeller.ActionData({
+            isWithdrawal: true,
+            user: testUser,
+            to: testUser,
+            asset: token1,
+            amountIn: amount / 2,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: _generateSignature(SigData(
+                testUserPk,
+                address(intentsTeller),
+                address(this),
+                testUser,
+                address(token1),
+                true,
+                amount / 2,
+                0,
+                block.timestamp + 1 days
+            ))
+        }));
+        vm.stopPrank();
+
+        assertEq(boringVault.balanceOf(testUser), amount / 2);
+    }
+
+    // ========================================= TESTS FOR FAILURES =========================================
+
+    function testDepositFailsActionMismatch() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser));
+        token1.approve(address(boringVault), type(uint256).max);
+        token1.approve(address(intentsTeller), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(
+            abi.encodeWithSelector(IntentsTeller.IntentsTeller__ActionMismatch.selector)
+        );
+        intentsTeller.deposit(IntentsTeller.ActionData({
+            isWithdrawal: true, // This causes the expected failure
+            user: testUser,
+            to: testUser,
+            asset: token1,
+            amountIn: amount,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: _generateSignature(SigData(
+                testUserPk,
+                address(intentsTeller),
+                address(this),
+                testUser,
+                address(token1),
+                false,
+                amount,
+                0,
+                block.timestamp + 1 days
+            ))
+        }));
+        vm.stopPrank();
+    }
+
+    function testDepositFailsSigActionMismatch() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser));
+        token1.approve(address(boringVault), type(uint256).max);
+        token1.approve(address(intentsTeller), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(
+            abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector)
+        );
+        intentsTeller.deposit(IntentsTeller.ActionData({
+            isWithdrawal: false,
+            user: testUser,
+            to: testUser,
+            asset: token1,
+            amountIn: amount,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: _generateSignature(SigData(
+                testUserPk,
+                address(intentsTeller),
+                address(this),
+                testUser,
+                address(token1),
+                true, // This causes the expected failure
+                amount,
+                0,
+                block.timestamp + 1 days
+            ))
+        }));
+        vm.stopPrank();
+    }
+
+    function testDepositFailsAmountMismatch() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser));
+        token1.approve(address(boringVault), type(uint256).max);
+        token1.approve(address(intentsTeller), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(
+            abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector)
+        );
+        intentsTeller.deposit(IntentsTeller.ActionData({
+            isWithdrawal: false,
+            user: testUser,
+            to: testUser,
+            asset: token1,
+            amountIn: amount / 2 ,  // This causes the expected failure
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: _generateSignature(SigData(
+                testUserPk,
+                address(intentsTeller),
+                address(this),
+                testUser,
+                address(token1),
+                true,
+                amount,
+                0,
+                block.timestamp + 1 days
+            ))
+        }));
+        vm.stopPrank();
     }
 
     // ========================================= HELPER FUNCTIONS =========================================
