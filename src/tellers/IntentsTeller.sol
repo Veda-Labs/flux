@@ -13,7 +13,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {IFluxManager} from "src/interfaces/IFluxManager.sol";
 
-contract SorellaIntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
+contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
 
