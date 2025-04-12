@@ -168,7 +168,6 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
-        vm.stopPrank();
 
         assertEq(boringVault.balanceOf(testUser0), amount);
     }
@@ -208,7 +207,6 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
-        vm.stopPrank();
 
         // Withdraw using executor
         intentsTeller.bulkWithdraw(
@@ -235,7 +233,6 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
-        vm.stopPrank();
 
         assertEq(boringVault.balanceOf(testUser0), amount / 2);
     }
@@ -279,7 +276,6 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__DuplicateSignature.selector));
         intentsTeller.deposit(depositData);
-        vm.stopPrank();
 
         assertEq(boringVault.balanceOf(testUser0), 0);
     }
@@ -318,7 +314,7 @@ contract IntentsTellerTest is Test {
     //     r,
     //     s
     //     );
-    //     vm.stopPrank();
+
 
     //     assertEq(boringVault.balanceOf(testUser0), amount);
     // }
@@ -361,7 +357,6 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
-        vm.stopPrank();
     }
 
     function testDepositFailsSigActionMismatch() external {
@@ -400,7 +395,6 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
-        vm.stopPrank();
     }
 
     function testDepositFailsAmountMismatch() external {
@@ -439,10 +433,9 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
-        vm.stopPrank();
     }
 
-    function testDepositFromOtherUserFails() external {
+    function testDepositFailsFromOtherUser() external {
         uint256 amount = 1e18;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
@@ -478,10 +471,9 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
-        vm.stopPrank();
     }
 
-    function testDepositToDifferentUserFails() external {
+    function testDepositFailsToDifferentUser() external {
         uint256 amount = 1e18;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
@@ -517,7 +509,6 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
-        vm.stopPrank();
     }
 
     function testDepositFailsDeadlinePassed() external {
@@ -556,7 +547,6 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
-        vm.stopPrank();
     }
 
     function testDepositFailsDeadlineTooFarInFuture() external {
@@ -595,7 +585,108 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
+    }
+
+    function testDepositFailsWhenMinOutNotMet() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
         vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__MinimumMintNotMet.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 1e18 + 1, // This causes the expected failure
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        1e18 + 1,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+    }
+
+    function testWithdrawFailsWhenMinOutNotMet() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        // Withdraw using executor
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__MinimumAssetsNotMet.selector));
+        intentsTeller.bulkWithdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount / 2,
+                minimumOut: 1e18 + 1, // This causes the expected failure
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true,
+                        amount / 2,
+                        1e18 + 1,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
     }
 
     // ========================================= HELPER FUNCTIONS =========================================
