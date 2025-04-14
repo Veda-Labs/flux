@@ -689,6 +689,164 @@ contract IntentsTellerTest is Test {
         );
     }
 
+    function testDepositFailsWithBadRate() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor (rate too high)
+        vm.expectRevert(abi.encodeWithSelector(ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 159571347400, 157983572700, 159571347300));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 1e18,
+                rate: 1595713474, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        1e18,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        // Deposit using executor (rate too low)
+        vm.expectRevert(abi.encodeWithSelector(ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 157983572600, 157983572700, 159571347300));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 1e18,
+                rate: 1579835726, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        1e18,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+    }
+
+    function testWithdrawFailsWithBadRate() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor with good rate
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 1e18,
+                rate: 1593713474, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        1e18,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        // Withdraw using executor (rate too high)
+        vm.expectRevert(abi.encodeWithSelector(ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 159571347400, 157983572700, 159571347300));
+        intentsTeller.bulkWithdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 1e18,
+                rate: 1595713474, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true,
+                        amount,
+                        1e18,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        // Withdraw using executor (rate too low)
+        vm.expectRevert(abi.encodeWithSelector(ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 157983572600, 157983572700, 159571347300));
+        intentsTeller.bulkWithdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 1e18,
+                rate: 1579835726, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true,
+                        amount,
+                        1e18,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+    }
+
+
+
     // ========================================= HELPER FUNCTIONS =========================================
     function _startFork(string memory rpcKey, uint256 blockNumber) internal returns (uint256 forkId) {
         forkId = vm.createFork(vm.envString(rpcKey), blockNumber);
