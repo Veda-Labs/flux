@@ -105,6 +105,15 @@ contract IntentsTellerTest is Test {
 
         intentsTeller.setAuthority(rolesAuthority);
 
+        manager.setAuthority(rolesAuthority);
+
+        rolesAuthority.setRoleCapability(
+            2,
+            address(manager),
+            bytes4(keccak256(abi.encodePacked("refreshInternalFluxAccounting()"))),
+            true
+        );
+
         boringVault.setBeforeTransferHook(address(intentsTeller));
 
         // GIVE ROLE 1 ALL SOLVER PERMS
@@ -210,7 +219,7 @@ contract IntentsTellerTest is Test {
             })
         );
 
-        manager.refreshInternalFluxAccounting();
+        // manager.refreshInternalFluxAccounting(); -- this is now handled in deposit and withdraw
 
         // Withdraw using executor
         intentsTeller.bulkWithdraw(
@@ -353,7 +362,7 @@ contract IntentsTellerTest is Test {
             })
         );
 
-        manager.refreshInternalFluxAccounting();
+        // manager.refreshInternalFluxAccounting(); -- this is now handled in deposit and withdraw
         
         // Check that the deposit was successful
         assertEq(boringVault.balanceOf(testUser0), amount);

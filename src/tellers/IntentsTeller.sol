@@ -457,6 +457,8 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
 
         _verifySignedMessage(withdrawData);
 
+        fluxManager.refreshInternalFluxAccounting();
+
         assetsOut = withdrawData.amountIn.mulDivDown(fluxManager.getRateSafe(withdrawData.rate, false), ONE_SHARE); // check rate direction
 
         if (assetsOut < withdrawData.minimumOut) {
@@ -493,6 +495,8 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
             revert IntentsTeller__ActionMismatch();
         }
         _verifySignedMessage(depositData);
+
+        fluxManager.refreshInternalFluxAccounting();
 
         shares = depositData.amountIn.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, true)); // TODO check rate direction
 
