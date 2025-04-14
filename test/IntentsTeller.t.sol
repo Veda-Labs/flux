@@ -467,12 +467,130 @@ contract IntentsTellerTest is Test {
         );
     }
 
+    function testShareLockPeriod() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Set the share lock period above max limit
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ShareLockPeriodTooLong.selector));
+        intentsTeller.setShareLockPeriod(8 days);
+
+        // Set the share lock period to 3 days
+        intentsTeller.setShareLockPeriod(3 days);
+
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        assertEq(boringVault.balanceOf(testUser0), amount);
+
+        // Check that share lock is enforced, and properly expires
+        vm.startPrank(testUser0);
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__SharesAreLocked.selector));
+        boringVault.transfer(address(this), amount);
+
+        vm.warp(block.timestamp + 3 days + 1);
+        boringVault.transfer(address(this), amount);
+
+    }
+
+    function testRefundDeposit() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        intentsTeller.setShareLockPeriod(3 days);
+
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        assertEq(boringVault.balanceOf(testUser0), amount);
+
+        // Refund deposit
+        intentsTeller.refundDeposit(1, testUser0, address(token1), amount, amount, block.timestamp, 3 days);
+
+        assertEq(boringVault.balanceOf(testUser0), 0);
+        assertEq(token1.balanceOf(testUser0), amount);
+    }
+
     // function testDepositWithPermit() external {
     //     uint256 amount = 1e18;
     //     // Fund test user with tokens.
     //     deal(address(token1), testUser0, amount);
 
-    //     // TODO: Give Permit Sig
+    //     // Give Permit Sig
+    //     bytes32 digest = keccak256(
+    //         abi.encodePacked(
+    //             "\x19\x01",
+    //             WEETH.DOMAIN_SEPARATOR(),
+    //             keccak256(
+    //                 abi.encode(
+    //                     keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+    //                     testUser0,
+    //                     address(boringVault),
+    //                     amount,
+    //                     WEETH.nonces(user),
+    //                     block.timestamp
+    //                 )
+    //             )
+    //         )
+    //     );
+    //     (uint8 v, bytes32 r, bytes32 s) = vm.sign(testUser0Pk, digest);
 
     //     // Deposit using executor
     //     intentsTeller.depositWithPermit(IntentsTeller.ActionData({
@@ -1228,6 +1346,59 @@ contract IntentsTellerTest is Test {
                 )
             })
         );
+    }
+
+    function testRefundDepositFails() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        intentsTeller.setShareLockPeriod(3 days);
+
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        assertEq(boringVault.balanceOf(testUser0), amount);
+
+        // Refund deposit with bad receiver
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__BadDepositHash.selector));
+        intentsTeller.refundDeposit(1, testUser1, address(token1), amount, amount, block.timestamp, 3 days);
+
+        assertEq(boringVault.balanceOf(testUser0), amount);
+        uint256 depositTimestamp = block.timestamp;
+        vm.warp(block.timestamp + 3 days + 1);
+        // Refund deposit after unlock
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__SharesAreUnLocked.selector));
+        intentsTeller.refundDeposit(1, testUser0, address(token1), amount, amount, depositTimestamp, 3 days);
+        assertEq(boringVault.balanceOf(testUser0), amount);
     }
 
     // ========================================= HELPER FUNCTIONS =========================================
