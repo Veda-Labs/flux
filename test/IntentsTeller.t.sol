@@ -105,6 +105,8 @@ contract IntentsTellerTest is Test {
 
         intentsTeller.setAuthority(rolesAuthority);
 
+        boringVault.setBeforeTransferHook(address(intentsTeller));
+
         // GIVE ROLE 1 ALL SOLVER PERMS
         // rolesAuthority.setRoleCapability(
         //     1, address(intentsTeller), bytes4(keccak256(abi.encodePacked("deposit((uint256,address,address,address,address,bool,uint256,uin256,uint256))"))), true
@@ -208,6 +210,8 @@ contract IntentsTellerTest is Test {
             })
         );
 
+        manager.refreshInternalFluxAccounting();
+
         // Withdraw using executor
         intentsTeller.bulkWithdraw(
             IntentsTeller.ActionData({
@@ -216,7 +220,7 @@ contract IntentsTellerTest is Test {
                 to: testUser0,
                 asset: token1,
                 amountIn: amount / 2,
-                minimumOut: 0,
+                minimumOut: 1,
                 rate: 1589835727,
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
@@ -227,14 +231,16 @@ contract IntentsTellerTest is Test {
                         address(token1),
                         true,
                         amount / 2,
-                        0,
+                        1,
                         block.timestamp + 1 days
                     )
                 )
             })
         );
 
+        // Check that the withdraw was successful
         assertEq(boringVault.balanceOf(testUser0), amount / 2);
+        assertEq(token1.balanceOf(testUser0), amount / 2);
     }
 
     function testCancelDepositSig() external {
@@ -278,6 +284,187 @@ contract IntentsTellerTest is Test {
         intentsTeller.deposit(depositData);
 
         assertEq(boringVault.balanceOf(testUser0), 0);
+    }
+
+    function testPausing() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Pause Teller
+        intentsTeller.pause();
+
+        // Deposit using executor
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__Paused.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        // Unpause Teller
+        intentsTeller.unpause();
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        manager.refreshInternalFluxAccounting();
+        
+        // Check that the deposit was successful
+        assertEq(boringVault.balanceOf(testUser0), amount);
+
+        // Pause Teller
+        intentsTeller.pause();
+
+        // Withdraw using executor
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__Paused.selector));
+        intentsTeller.bulkWithdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount / 2,
+                minimumOut: 1,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true,
+                        amount / 2,
+                        1,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        // Unpause Teller
+        intentsTeller.unpause();
+
+        // Withdraw using executor
+        intentsTeller.bulkWithdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount / 2,
+                minimumOut: 1,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true,
+                        amount / 2,
+                        1,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+        // Check that the withdraw was successful
+        assertEq(boringVault.balanceOf(testUser0), amount / 2);
+        assertEq(token1.balanceOf(testUser0), amount / 2);
+    }
+
+    function testDenyList() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deny list user
+        intentsTeller.denyAll(testUser0);
+
+        // Deposit using executor
+        //vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__TransferDenied.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+        vm.prank(testUser0);
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__TransferDenied.selector, testUser0, address(this), testUser0));
+        boringVault.transfer(
+            address(this),
+            amount
+        );
     }
 
     // function testDepositWithPermit() external {
@@ -845,7 +1032,203 @@ contract IntentsTellerTest is Test {
         );
     }
 
+    function testDepositFailsZeroAssets() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
 
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ZeroAssets.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: 0, // This causes the expected failure
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        0,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+    }
+
+    function testWithdrawFailsZeroShares() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        // Attempt Withdraw using executor
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ZeroShares.selector));
+        intentsTeller.bulkWithdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: 0, // This causes the expected failure
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true,
+                        0,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+        assertEq(boringVault.balanceOf(testUser0), amount);
+    }
+
+    function testDepositsFailWhenAssetNotSupported() external {
+        uint256 amount = 1e18;
+
+        // Deposit using executor
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__AssetNotSupported.selector));
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7), // This causes the expected failure
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        0xdAC17F958D2ee523a2206206994597C13D831ec7,
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+    }
+
+    function testWithdrawsFailWhenAssetNotSupported() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        // Deposit using executor
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__AssetNotSupported.selector));
+        intentsTeller.bulkWithdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7), // This causes the expected failure
+                amountIn: amount,
+                minimumOut: 1,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        0xdAC17F958D2ee523a2206206994597C13D831ec7,
+                        false,
+                        amount,
+                        1,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+    }
 
     // ========================================= HELPER FUNCTIONS =========================================
     function _startFork(string memory rpcKey, uint256 blockNumber) internal returns (uint256 forkId) {

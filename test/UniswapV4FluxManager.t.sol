@@ -43,7 +43,7 @@ contract UniswapV4FluxManagerTest is Test {
 
         rolesAuthority = new RolesAuthority(address(this), Authority(address(0)));
 
-        boringVault = new BoringVault(address(this), "Test0", "T0", 18);
+        boringVault = new BoringVault(address(this), "Test1", "T1", 18);
 
         boringVault.setAuthority(rolesAuthority);
 

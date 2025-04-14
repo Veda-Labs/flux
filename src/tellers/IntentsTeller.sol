@@ -457,7 +457,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
 
         _verifySignedMessage(withdrawData);
 
-        assetsOut = withdrawData.amountIn.mulDivDown(fluxManager.getRateSafe(withdrawData.rate, true), ONE_SHARE); // check rate direction
+        assetsOut = withdrawData.amountIn.mulDivDown(fluxManager.getRateSafe(withdrawData.rate, false), ONE_SHARE); // check rate direction
 
         if (assetsOut < withdrawData.minimumOut) {
             revert IntentsTeller__MinimumAssetsNotMet();
