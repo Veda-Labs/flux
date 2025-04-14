@@ -43,7 +43,7 @@ contract UniswapV4FluxManagerTest is Test {
 
         rolesAuthority = new RolesAuthority(address(this), Authority(address(0)));
 
-        boringVault = new BoringVault(address(this), "Test1", "T1", 18);
+        boringVault = new BoringVault{salt: "Test1"}(address(this), "Test1", "T1", 18);
 
         boringVault.setAuthority(rolesAuthority);
 
@@ -92,7 +92,7 @@ contract UniswapV4FluxManagerTest is Test {
         // uint256 usdcAmount = 10_000e6;
         uint256 ethAmount = 3384967315990850674;
         uint256 usdcAmount = 8979053538;
-        deal(address(boringVault), ethAmount);
+        deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
         // (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee) =
@@ -130,7 +130,7 @@ contract UniswapV4FluxManagerTest is Test {
     function testBurning(uint256 ethAmount, uint256 usdcAmount) external {
         ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
         usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
-        deal(address(boringVault), ethAmount);
+        deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
         (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
@@ -165,7 +165,7 @@ contract UniswapV4FluxManagerTest is Test {
     function testLiquidityManagement(uint256 ethAmount, uint256 usdcAmount) external {
         ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
         usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
-        deal(address(boringVault), 2 * ethAmount);
+        deal(nativeWrapper, address(boringVault), 2 * ethAmount);
         deal(address(token1), address(boringVault), 2 * usdcAmount);
 
         (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
@@ -212,7 +212,7 @@ contract UniswapV4FluxManagerTest is Test {
     function testSwapping() external {
         uint256 ethAmount = 1e18;
         uint256 usdcAmount = 10_000e6;
-        deal(address(boringVault), ethAmount);
+        deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
         uint256 price = 2_652.626362e6;
@@ -229,7 +229,7 @@ contract UniswapV4FluxManagerTest is Test {
         manager.setAggregator(address(this));
         uint256 ethAmount = 1e18;
         uint256 usdcAmount = 10_000e6;
-        deal(address(boringVault), ethAmount);
+        deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
         uint256 price = 2_652.626362e6;
