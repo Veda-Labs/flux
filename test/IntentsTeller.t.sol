@@ -108,10 +108,7 @@ contract IntentsTellerTest is Test {
         manager.setAuthority(rolesAuthority);
 
         rolesAuthority.setRoleCapability(
-            2,
-            address(manager),
-            bytes4(keccak256(abi.encodePacked("refreshInternalFluxAccounting()"))),
-            true
+            2, address(manager), bytes4(keccak256(abi.encodePacked("refreshInternalFluxAccounting()"))), true
         );
 
         boringVault.setBeforeTransferHook(address(intentsTeller));
@@ -363,7 +360,7 @@ contract IntentsTellerTest is Test {
         );
 
         // manager.refreshInternalFluxAccounting(); -- this is now handled in deposit and withdraw
-        
+
         // Check that the deposit was successful
         assertEq(boringVault.balanceOf(testUser0), amount);
 
@@ -442,8 +439,41 @@ contract IntentsTellerTest is Test {
         // Deny list user
         intentsTeller.denyAll(testUser0);
 
-        // Deposit using executor
-        //vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__TransferDenied.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IntentsTeller.IntentsTeller__TransferDenied.selector,
+                0x0000000000000000000000000000000000000000,
+                testUser0,
+                address(this)
+            )
+        );
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        intentsTeller.allowTo(testUser0);
+        // Deposit using executor when allowed
         intentsTeller.deposit(
             IntentsTeller.ActionData({
                 isWithdrawal: false,
@@ -469,11 +499,12 @@ contract IntentsTellerTest is Test {
             })
         );
         vm.prank(testUser0);
-        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__TransferDenied.selector, testUser0, address(this), testUser0));
-        boringVault.transfer(
-            address(this),
-            amount
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IntentsTeller.IntentsTeller__TransferDenied.selector, testUser0, address(this), testUser0
+            )
         );
+        boringVault.transfer(address(this), amount);
     }
 
     function testShareLockPeriod() external {
@@ -527,7 +558,6 @@ contract IntentsTellerTest is Test {
 
         vm.warp(block.timestamp + 3 days + 1);
         boringVault.transfer(address(this), amount);
-
     }
 
     function testRefundDeposit() external {
@@ -628,7 +658,6 @@ contract IntentsTellerTest is Test {
     //     r,
     //     s
     //     );
-
 
     //     assertEq(boringVault.balanceOf(testUser0), amount);
     // }
@@ -1014,7 +1043,11 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor (rate too high)
-        vm.expectRevert(abi.encodeWithSelector(ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 159571347400, 157983572700, 159571347300));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 159571347400, 157983572700, 159571347300
+            )
+        );
         intentsTeller.deposit(
             IntentsTeller.ActionData({
                 isWithdrawal: false,
@@ -1041,7 +1074,11 @@ contract IntentsTellerTest is Test {
         );
 
         // Deposit using executor (rate too low)
-        vm.expectRevert(abi.encodeWithSelector(ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 157983572600, 157983572700, 159571347300));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 157983572600, 157983572700, 159571347300
+            )
+        );
         intentsTeller.deposit(
             IntentsTeller.ActionData({
                 isWithdrawal: false,
@@ -1105,7 +1142,11 @@ contract IntentsTellerTest is Test {
         );
 
         // Withdraw using executor (rate too high)
-        vm.expectRevert(abi.encodeWithSelector(ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 159571347400, 157983572700, 159571347300));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 159571347400, 157983572700, 159571347300
+            )
+        );
         intentsTeller.bulkWithdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: true,
@@ -1132,7 +1173,11 @@ contract IntentsTellerTest is Test {
         );
 
         // Withdraw using executor (rate too low)
-        vm.expectRevert(abi.encodeWithSelector(ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 157983572600, 157983572700, 159571347300));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 157983572600, 157983572700, 159571347300
+            )
+        );
         intentsTeller.bulkWithdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: true,

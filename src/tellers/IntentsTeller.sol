@@ -464,11 +464,12 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         if (assetsOut < withdrawData.minimumOut) {
             revert IntentsTeller__MinimumAssetsNotMet();
         }
+
+        beforeTransfer(withdrawData.user, address(0), msg.sender); // TODO: check these are the correct addrs
         vault.exit(withdrawData.to, withdrawData.asset, assetsOut, withdrawData.user, withdrawData.amountIn);
         emit BulkWithdraw(address(withdrawData.asset), withdrawData.amountIn);
     }
 
-    // TODO make sure this is sufficient to cancel
     /**
      * @notice Allows users to cancel a pending signature.
      * @dev Callable by the user who signed the message.
@@ -478,7 +479,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         if (actionData.user != msg.sender) {
             revert IntentsTeller__InvalidSignature();
         }
-        // TODO: is a second function needed to bypass any checks like deadline? -- probably not since there is no need to cancel if deadline has passed
         _verifySignedMessage(actionData);
     }
 
@@ -504,6 +504,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         if (shares < depositData.minimumOut) {
             revert IntentsTeller__MinimumMintNotMet();
         }
+        beforeTransfer(address(0), depositData.to, msg.sender); // TODO: check these are the correct addrs
         vault.enter(depositData.user, depositData.asset, depositData.amountIn, depositData.to, shares);
     }
 
@@ -560,7 +561,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         }
     }
 
-    // TODO: confirm that executor can stay out of signature, confirm that nothing else is needed in sig
     function _verifySignedMessage(ActionData memory actionData) internal {
         // Recreate the signed message and verify the signature
         // Signature does not include rate as rate is specified by executor at execution time
