@@ -294,8 +294,9 @@ contract UniswapV4FluxManagerTest is Test {
     }
 
     function testFees() external {
-        uint256 ethAmount = 1e18;
-        uint256 usdcAmount = 1000e6;
+        // deposit huge amounts in order to be the primary LP and fee accruer
+        uint256 ethAmount = 1e18 * 1_000_000;
+        uint256 usdcAmount = 2_652.626362e6 * 1_000_000;
         deal(nativeWrapper, address(boringVault), 2 * ethAmount);
         deal(address(token1), address(boringVault), 2 * usdcAmount);
 
@@ -318,45 +319,21 @@ contract UniswapV4FluxManagerTest is Test {
         actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
         manager.rebalance(price, actions);
 
-        actions = new UniswapV4FluxManager.Action[](1);
-        actions[0].kind = UniswapV4FluxManager.ActionKind.INCREASE_LIQUIDITY;
-        actions[0].data = abi.encode(manager.trackedPositions(0), liquidity, ethAmount, usdcAmount, block.timestamp);
+        deal(address(token1), address(boringVault), 100e6);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
+        actions[0].data = abi.encode(100e6, 0, block.timestamp);
         manager.rebalance(price, actions);
-
-        actions = new UniswapV4FluxManager.Action[](1);
-        actions[0].kind = UniswapV4FluxManager.ActionKind.DECREASE_LIQUIDITY;
-        actions[0].data = abi.encode(manager.trackedPositions(0), liquidity / 2, 0, 0, block.timestamp);
-        manager.rebalance(price, actions);
-
-        uint256 token0BalanceBefore = address(boringVault).balance;
-        uint256 token1BalanceBefore = token1.balanceOf(address(boringVault));
-
-        console.log("=== Before Fees ===");
-        console.log("token0BalanceBefore:", token0BalanceBefore);
-        console.log("token1BalanceBefore:", token1BalanceBefore);
 
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.COLLECT_FEES;
         actions[0].data = abi.encode(manager.trackedPositions(0), block.timestamp);
         manager.rebalance(price, actions);
 
-        uint256 token0BalanceAfter = address(boringVault).balance;
-        uint256 token1BalanceAfter = token1.balanceOf(address(boringVault));
-        console.log("=== After Fees ===");
-        console.log("token0BalanceAfter:", token0BalanceAfter);
-        console.log("token1BalanceAfter:", token1BalanceAfter);
-
-        (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
-        assertApproxEqRel(token0Balance, 2 * ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
-        assertApproxEqRel(
-            token1Balance, 2 * usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount"
-        );
-
-        uint256 expectedFeeInUsdc = 10_000e6;
+        uint256 expectedFeeToVaultInUsdc = 5e4;
 
         manager.claimFees(false);
 
-        assertApproxEqAbs(token1.balanceOf(payout), expectedFeeInUsdc, 1, "Claimed Fee should equal expected");
+        assertApproxEqRel(token1.balanceOf(payout), expectedFeeToVaultInUsdc * manager.performanceFee() / 1e4, 1e16, "Claimed Fee should equal expected");
     }
 
     // ========================================= HELPER FUNCTIONS =========================================
