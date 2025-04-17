@@ -671,11 +671,216 @@ contract IntentsTellerTest is Test {
     }
 
     function testMultipleAssetsDepositWithdraw() external {
-        revert();
+        uint256 amount = 1e10;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        false,
+                        amount,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            }),
+            true
+        );
+
+        assertEq(boringVault.balanceOf(testUser0), amount);
+
+
+        uint256 amount1 = 1e18;
+        // Now Deposit token0 with user 1
+        deal(address(token0), testUser1, amount1);
+        vm.startPrank(address(testUser1));
+        token0.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser1,
+                to: testUser1,
+                asset: token0,
+                amountIn: amount1,
+                minimumOut: 0,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser1Pk,
+                        address(intentsTeller),
+                        testUser1,
+                        address(token0),
+                        false,
+                        amount1,
+                        0,
+                        block.timestamp + 1 days
+                    )
+                )
+            }),
+            true
+        );
+
+        assertEq(boringVault.balanceOf(testUser1), 1589835727);
+        assertEq(token0.balanceOf(testUser1), 0);
+
+        // Now Withdraw token1 with user 0
+        intentsTeller.withdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser0,
+                to: testUser0,
+                asset: token1,
+                amountIn: amount,
+                minimumOut: 1,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token1),
+                        true,
+                        amount,
+                        1,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+        assertEq(boringVault.balanceOf(testUser0), 0);
+        assertEq(token1.balanceOf(testUser0), amount);
+
+        // Now Withdraw token0 with user 1
+        intentsTeller.withdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser1,
+                to: testUser1,
+                asset: token0,
+                amountIn: 1589835727,
+                minimumOut: 1,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser1Pk,
+                        address(intentsTeller),
+                        testUser1,
+                        address(token0),
+                        true,
+                        1589835727,
+                        1,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+        assertEq(boringVault.balanceOf(testUser1), 0);
+        assertApproxEqRel(token0.balanceOf(testUser1), amount1, 1e12); //0.0001% error tolerance
+
     }
 
     function testBulkActions() external {
-        revert();
+        // generate signature for user 0 to deposit 1e10 USDC to user 1
+        uint256 amount = 1e10;
+        // Fund test user with tokens.
+        deal(address(token1), testUser0, amount);
+
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token1.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
+
+        // Generate signature for user 0 to deposit 1e10 USDC to user 1
+        bytes memory depositSig = _generateSignature(
+            SigData(
+                testUser0Pk,
+                address(intentsTeller),
+                testUser1,
+                address(token1),
+                false,
+                amount,
+                0,
+                block.timestamp + 1 days
+            )
+        );
+
+        // Generate signature for user 1 to withdraw 5e9 USDC to user 0
+        bytes memory withdrawSig = _generateSignature(
+            SigData(
+                testUser1Pk,
+                address(intentsTeller),
+                testUser0,
+                address(token1),
+                true,
+                amount / 2,
+                0,
+                block.timestamp + 1 days
+            )
+        );
+
+        // Generate Array of actions
+        IntentsTeller.ActionData[] memory actions = new IntentsTeller.ActionData[](2);
+        actions[0] = IntentsTeller.ActionData({
+            isWithdrawal: false,
+            user: testUser0,
+            to: testUser1,
+            asset: token1,
+            amountIn: amount,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: depositSig
+        });
+        actions[1] = IntentsTeller.ActionData({
+            isWithdrawal: true,
+            user: testUser1,
+            to: testUser0,
+            asset: token1,
+            amountIn: amount / 2,
+            minimumOut: 0,
+            rate: 1589835727,
+            deadline: block.timestamp + 1 days,
+            sig: withdrawSig
+        });
+
+        bool[] memory enforceShareLock = new bool[](2);
+        enforceShareLock[0] = false;
+        enforceShareLock[1] = false;
+
+        // Use bulk actions to deposit and withdraw
+        intentsTeller.bulkActions(actions, enforceShareLock);
+
+        // Check that the actions were successful
+        assertEq(boringVault.balanceOf(testUser1), amount / 2);
+        assertEq(boringVault.balanceOf(testUser0), 0);
+        assertEq(token1.balanceOf(testUser0), amount / 2);
+        assertEq(token1.balanceOf(testUser1), 0);
     }
 
     // ========================================= TESTS FOR FAILURES =========================================

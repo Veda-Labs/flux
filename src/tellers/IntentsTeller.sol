@@ -427,7 +427,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         assetsOut = _erc20Withdraw(withdrawData);
     }
 
-    function bulkAction(ActionData[] memory actionData, bool[] memory enforceShareLock) external requiresAuth nonReentrant {
+    function bulkActions(ActionData[] memory actionData, bool[] memory enforceShareLock) external requiresAuth nonReentrant {
         for (uint256 i = 0; i < actionData.length; i++) {
             if (actionData[i].isWithdrawal) {
                 _erc20Withdraw(actionData[i]);
