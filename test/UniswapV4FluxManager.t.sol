@@ -293,89 +293,71 @@ contract UniswapV4FluxManagerTest is Test {
         assertEq(rateIn1, exchangeRate, "Zero share rate should be exchange rate");
     }
 
-    // function testPerformanceReviewInToken0() external {
-    //     // Mint some shares so we can reviewPerformance
-    //     boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
-    //     uint256 ethAmount = 0;
-    //     uint256 usdcAmount = 50_000e6;
-    //     deal(address(boringVault), ethAmount);
-    //     deal(address(token1), address(boringVault), usdcAmount);
+    function testFees() external {
+        uint256 ethAmount = 1e18;
+        uint256 usdcAmount = 1000e6;
+        deal(nativeWrapper, address(boringVault), 2 * ethAmount);
+        deal(address(token1), address(boringVault), 2 * usdcAmount);
 
-    //     //manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN0, true);
+        (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
 
-    //     //manager.reviewPerformance();
+        uint256 price = 2_652.626362e6;
 
-    //     assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
+        int24 tickLower = -887_270;
+        int24 tickUpper = 887_270;
+        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(tickUpper),
+            ethAmount,
+            usdcAmount
+        );
 
-    //     deal(address(token1), address(boringVault), 2 * usdcAmount);
+        UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
+        actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
+        manager.rebalance(price, actions);
 
-    //     //manager.reviewPerformance();
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.INCREASE_LIQUIDITY;
+        actions[0].data = abi.encode(manager.trackedPositions(0), liquidity, ethAmount, usdcAmount, block.timestamp);
+        manager.rebalance(price, actions);
 
-    //     uint256 expectedFeeInUsdc = 10_000e6;
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.DECREASE_LIQUIDITY;
+        actions[0].data = abi.encode(manager.trackedPositions(0), liquidity / 2, 0, 0, block.timestamp);
+        manager.rebalance(price, actions);
 
-    //     manager.claimFees(false);
+        uint256 token0BalanceBefore = address(boringVault).balance;
+        uint256 token1BalanceBefore = token1.balanceOf(address(boringVault));
 
-    //     assertApproxEqAbs(token1.balanceOf(payout), expectedFeeInUsdc, 1, "Claimed Fee should equal expected");
-    // }
+        console.log("=== Before Fees ===");
+        console.log("token0BalanceBefore:", token0BalanceBefore);
+        console.log("token1BalanceBefore:", token1BalanceBefore);
 
-    // function testPerformanceReviewInToken1() external {
-    //     // Mint some shares so we can reviewPerformance
-    //     boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
-    //     uint256 ethAmount = 0;
-    //     uint256 usdcAmount = 50_000e6;
-    //     deal(address(boringVault), ethAmount);
-    //     deal(address(token1), address(boringVault), usdcAmount);
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.COLLECT_FEES;
+        actions[0].data = abi.encode(manager.trackedPositions(0), block.timestamp);
+        manager.rebalance(price, actions);
 
-    //     //manager.switchPerformanceMetric(FluxManager.PerformanceMetric.TOKEN1, true);
+        uint256 token0BalanceAfter = address(boringVault).balance;
+        uint256 token1BalanceAfter = token1.balanceOf(address(boringVault));
+        console.log("=== After Fees ===");
+        console.log("token0BalanceAfter:", token0BalanceAfter);
+        console.log("token1BalanceAfter:", token1BalanceAfter);
 
-    //     //manager.reviewPerformance();
+        (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
+        assertApproxEqRel(token0Balance, 2 * ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
+        assertApproxEqRel(
+            token1Balance, 2 * usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount"
+        );
 
-    //     assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
+        uint256 expectedFeeInUsdc = 10_000e6;
 
-    //     deal(address(token1), address(boringVault), 100_000e6);
+        manager.claimFees(false);
 
-    //     //manager.reviewPerformance();
-
-    //     uint256 expectedFeeInUsdc = 10_000e6;
-
-    //     manager.claimFees(false);
-
-    //     assertEq(token1.balanceOf(payout), expectedFeeInUsdc, "Claimed Fee should equal expected");
-    // }
-
-    // function testPerformanceReviewInLiquidity(int24 tickLower, int24 tickUpper) external {
-    //     tickLower = int24(bound(tickLower, -887_270, 887_269));
-    //     tickUpper = int24(bound(tickUpper, -887_270, 887_269));
-    //     if (tickLower == tickUpper) {
-    //         tickUpper++;
-    //     }
-    //     if (tickLower > tickUpper) {
-    //         (tickLower, tickUpper) = (tickUpper, tickLower);
-    //     }
-    //     // Mint some shares so we can reviewPerformance
-    //     boringVault.enter(address(0), ERC20(address(0)), 0, address(this), 1e18);
-    //     uint256 ethAmount = 0;
-    //     uint256 usdcAmount = 50_000e6;
-    //     deal(address(boringVault), ethAmount);
-    //     deal(address(token1), address(boringVault), usdcAmount);
-
-    //     manager.setReferenceTicks(tickLower, tickUpper, true);
-    //     //manager.switchPerformanceMetric(FluxManager.PerformanceMetric.LIQUIDITY, true);
-
-    //     //manager.reviewPerformance();
-
-    //     assertEq(manager.pendingFee(), 0, "Pending Fee should be zero");
-
-    //     deal(address(token1), address(boringVault), 100_000e6);
-
-    //     //manager.reviewPerformance();
-
-    //     uint256 expectedFeeInUsdc = 10_000e6;
-
-    //     manager.claimFees(false);
-
-    //     assertApproxEqRel(token1.balanceOf(payout), expectedFeeInUsdc, 0.0001e18, "Claimed Fee should equal expected");
-    // }
+        assertApproxEqAbs(token1.balanceOf(payout), expectedFeeInUsdc, 1, "Claimed Fee should equal expected");
+    }
 
     // ========================================= HELPER FUNCTIONS =========================================
 

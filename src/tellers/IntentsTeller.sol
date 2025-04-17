@@ -42,6 +42,13 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         bytes sig;
     }
 
+    struct BeforeTransferData {
+        bool denyFrom;
+        bool denyTo;
+        bool denyOperator;
+        uint256 shareUnlockTime;
+    }
+
     // ========================================= CONSTANTS =========================================
 
     /**
@@ -106,24 +113,9 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
     mapping(uint256 => bytes32) public publicDepositHistory;
 
     /**
-     * @notice Maps user address to the time their shares will be unlocked.
+     * @notice Maps address to BeforeTransferData struct to check if shares are locked and if the address is on the deny list for any operation.
      */
-    mapping(address => uint256) public shareUnlockTime;
-
-    /**
-     * @notice Mapping `from` address to a bool to deny them from transferring shares.
-     */
-    mapping(address => bool) public fromDenyList;
-
-    /**
-     * @notice Mapping `to` address to a bool to deny them from receiving shares.
-     */
-    mapping(address => bool) public toDenyList;
-
-    /**
-     * @notice Mapping `opeartor` address to a bool to deny them from calling `transfer` or `transferFrom`.
-     */
-    mapping(address => bool) public operatorDenyList;
+    mapping(address => BeforeTransferData) public beforeTransferData;
 
     /**
      * @notice Mapping ethSignedMessageHash to a bool to deny them from using the same signature twice.
@@ -270,9 +262,9 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @dev Callable by OWNER_ROLE, and DENIER_ROLE.
      */
     function denyAll(address user) external requiresAuth {
-        fromDenyList[user] = true;
-        toDenyList[user] = true;
-        operatorDenyList[user] = true;
+        beforeTransferData[user].denyFrom = true;
+        beforeTransferData[user].denyTo = true;
+        beforeTransferData[user].denyOperator = true;
         emit DenyFrom(user);
         emit DenyTo(user);
         emit DenyOperator(user);
@@ -283,9 +275,9 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @dev Callable by OWNER_ROLE, and DENIER_ROLE.
      */
     function allowAll(address user) external requiresAuth {
-        fromDenyList[user] = false;
-        toDenyList[user] = false;
-        operatorDenyList[user] = false;
+        beforeTransferData[user].denyFrom = false;
+        beforeTransferData[user].denyTo = false;
+        beforeTransferData[user].denyOperator = false;
         emit AllowFrom(user);
         emit AllowTo(user);
         emit AllowOperator(user);
@@ -296,7 +288,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @dev Callable by OWNER_ROLE, and DENIER_ROLE.
      */
     function denyFrom(address user) external requiresAuth {
-        fromDenyList[user] = true;
+        beforeTransferData[user].denyFrom = true;
         emit DenyFrom(user);
     }
 
@@ -305,7 +297,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @dev Callable by OWNER_ROLE, and DENIER_ROLE.
      */
     function allowFrom(address user) external requiresAuth {
-        fromDenyList[user] = false;
+        beforeTransferData[user].denyFrom = false;
         emit AllowFrom(user);
     }
 
@@ -314,7 +306,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @dev Callable by OWNER_ROLE, and DENIER_ROLE.
      */
     function denyTo(address user) external requiresAuth {
-        toDenyList[user] = true;
+        beforeTransferData[user].denyTo = true;
         emit DenyTo(user);
     }
 
@@ -323,7 +315,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @dev Callable by OWNER_ROLE, and DENIER_ROLE.
      */
     function allowTo(address user) external requiresAuth {
-        toDenyList[user] = false;
+        beforeTransferData[user].denyTo = false;
         emit AllowTo(user);
     }
 
@@ -332,7 +324,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @dev Callable by OWNER_ROLE, and DENIER_ROLE.
      */
     function denyOperator(address user) external requiresAuth {
-        operatorDenyList[user] = true;
+        beforeTransferData[user].denyOperator = true;
         emit DenyOperator(user);
     }
 
@@ -341,7 +333,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      * @dev Callable by OWNER_ROLE, and DENIER_ROLE.
      */
     function allowOperator(address user) external requiresAuth {
-        operatorDenyList[user] = false;
+        beforeTransferData[user].denyOperator = false;
         emit AllowOperator(user);
     }
 
@@ -353,10 +345,10 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
      *         if this behavior is not desired then a share lock period of >=1 should be used.
      */
     function beforeTransfer(address from, address to, address operator) public view virtual {
-        if (fromDenyList[from] || toDenyList[to] || operatorDenyList[operator]) {
+        if (beforeTransferData[from].denyFrom || beforeTransferData[to].denyTo || beforeTransferData[operator].denyOperator) {
             revert IntentsTeller__TransferDenied(from, to, operator);
         }
-        if (shareUnlockTime[from] > block.timestamp) {
+        if (beforeTransferData[from].shareUnlockTime > block.timestamp) {
             revert IntentsTeller__SharesAreLocked();
         }
     }
@@ -530,7 +522,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         uint256 nonce = ++depositNonce;
         // Only set share unlock time and history if share lock period is greater than 0.
         if (currentShareLockPeriod > 0) {
-            shareUnlockTime[user] = block.timestamp + currentShareLockPeriod;
+            beforeTransferData[user].shareUnlockTime = block.timestamp + currentShareLockPeriod;
             publicDepositHistory[nonce] = keccak256(
                 abi.encode(user, depositAsset, depositAmount, shares, block.timestamp, currentShareLockPeriod)
             );
