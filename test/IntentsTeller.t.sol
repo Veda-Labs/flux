@@ -38,9 +38,9 @@ contract IntentsTellerTest is Test {
     IntentsTeller internal intentsTeller;
     address internal positionManager = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
     address internal universalRouter = 0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af;
-    ERC20 internal token0 = ERC20(address(0));
-    ERC20 internal token1 = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     address internal nativeWrapper = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    ERC20 internal token0 = ERC20(nativeWrapper);
+    ERC20 internal token1 = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     IPoolManager internal poolManager = IPoolManager(0x000000000004444c5dc75cB358380D2e3dE08A90);
     PoolId internal eth_usdc_pool_id = PoolId.wrap(0x21c67e77068de97969ba93d4aab21826d33ca12bb9f565d8496e8fda8a82ca27);
     address internal ETH_USD_ORACLE = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
@@ -62,7 +62,7 @@ contract IntentsTellerTest is Test {
 
         rolesAuthority = new RolesAuthority(address(this), Authority(address(0)));
 
-        boringVault = new BoringVault(address(this), "Test0", "T0", 18);
+        boringVault = new BoringVault(address(this), "Test0", "T0", 6);
 
         boringVault.setAuthority(rolesAuthority);
 
@@ -83,8 +83,6 @@ contract IntentsTellerTest is Test {
             true
         );
 
-        //rolesAuthority.setUserRole(0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9, 1, true);  // TODO: check this
-
         datum = new ChainlinkDatum(ETH_USD_ORACLE, 1 days, false);
 
         manager = new UniswapV4FluxManager(
@@ -92,7 +90,7 @@ contract IntentsTellerTest is Test {
             address(boringVault),
             address(token0),
             address(token1),
-            true,
+            false,
             nativeWrapper,
             address(datum),
             0.995e4,
@@ -113,25 +111,12 @@ contract IntentsTellerTest is Test {
 
         boringVault.setBeforeTransferHook(address(intentsTeller));
 
-        // GIVE ROLE 1 ALL SOLVER PERMS
-        // rolesAuthority.setRoleCapability(
-        //     1, address(intentsTeller), bytes4(keccak256(abi.encodePacked("deposit((uint256,address,address,address,address,bool,uint256,uin256,uint256))"))), true
-        // );
-        // rolesAuthority.setRoleCapability(
-        //     1, address(intentsTeller), bytes4(keccak256(abi.encodePacked("bulkWithdraw((uint256,address,address,address,address,bool,uint256,uin256,uint256))"))), true
-        // );
-
         intentsTeller.updateAssetData(token1, true, true, 0);
+        intentsTeller.updateAssetData(token0, true, true, 0);
 
         // SET UP ROLES FOR TELLER ON VAULT
         rolesAuthority.setUserRole(address(intentsTeller), 2, true);
 
-        // SET UP ROLES FOR SOLVER ON TELLER
-        // rolesAuthority.setUserRole(
-        //     address(this),
-        //     1,
-        //     true
-        // );
 
         // Make Signature Cancellation Public
         rolesAuthority.setPublicCapability(address(intentsTeller), IntentsTeller.cancelSignature.selector, true);
@@ -142,7 +127,7 @@ contract IntentsTellerTest is Test {
     }
 
     function testDepositSimple() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -174,14 +159,15 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            false
         );
 
         assertEq(boringVault.balanceOf(testUser0), amount);
     }
 
     function testWithdrawSimple() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -213,13 +199,14 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
 
         // manager.refreshInternalFluxAccounting(); -- this is now handled in deposit and withdraw
 
         // Withdraw using executor
-        intentsTeller.bulkWithdraw(
+        intentsTeller.withdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
@@ -250,7 +237,7 @@ contract IntentsTellerTest is Test {
     }
 
     function testCancelDepositSig() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -287,13 +274,13 @@ contract IntentsTellerTest is Test {
 
         // Deposit using executor
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__DuplicateSignature.selector));
-        intentsTeller.deposit(depositData);
+        intentsTeller.deposit(depositData, true);
 
         assertEq(boringVault.balanceOf(testUser0), 0);
     }
 
     function testPausing() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
         // Give required approvals.
@@ -328,7 +315,8 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            false
         );
 
         // Unpause Teller
@@ -356,7 +344,8 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
 
         // manager.refreshInternalFluxAccounting(); -- this is now handled in deposit and withdraw
@@ -369,7 +358,7 @@ contract IntentsTellerTest is Test {
 
         // Withdraw using executor
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__Paused.selector));
-        intentsTeller.bulkWithdraw(
+        intentsTeller.withdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
@@ -398,7 +387,7 @@ contract IntentsTellerTest is Test {
         intentsTeller.unpause();
 
         // Withdraw using executor
-        intentsTeller.bulkWithdraw(
+        intentsTeller.withdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
@@ -428,7 +417,7 @@ contract IntentsTellerTest is Test {
     }
 
     function testDenyList() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
         // Give required approvals.
@@ -469,7 +458,8 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            false
         );
 
         intentsTeller.allowTo(testUser0);
@@ -496,7 +486,8 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            false
         );
         vm.prank(testUser0);
         vm.expectRevert(
@@ -508,7 +499,7 @@ contract IntentsTellerTest is Test {
     }
 
     function testShareLockPeriod() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
         // Give required approvals.
@@ -546,7 +537,8 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
 
         assertEq(boringVault.balanceOf(testUser0), amount);
@@ -561,7 +553,7 @@ contract IntentsTellerTest is Test {
     }
 
     function testRefundDeposit() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -595,7 +587,8 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
 
         assertEq(boringVault.balanceOf(testUser0), amount);
@@ -607,65 +600,88 @@ contract IntentsTellerTest is Test {
         assertEq(token1.balanceOf(testUser0), amount);
     }
 
-    // function testDepositWithPermit() external {
-    //     uint256 amount = 1e18;
-    //     // Fund test user with tokens.
-    //     deal(address(token1), testUser0, amount);
+    function testDepositWithdrawToken0NativeWrapper() external {
+        uint256 amount = 1e18;
+        // Fund test user with tokens.
+        deal(address(token0), testUser0, amount);
 
-    //     // Give Permit Sig
-    //     bytes32 digest = keccak256(
-    //         abi.encodePacked(
-    //             "\x19\x01",
-    //             WEETH.DOMAIN_SEPARATOR(),
-    //             keccak256(
-    //                 abi.encode(
-    //                     keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
-    //                     testUser0,
-    //                     address(boringVault),
-    //                     amount,
-    //                     WEETH.nonces(user),
-    //                     block.timestamp
-    //                 )
-    //             )
-    //         )
-    //     );
-    //     (uint8 v, bytes32 r, bytes32 s) = vm.sign(testUser0Pk, digest);
+        // Give required approvals.
+        vm.startPrank(address(testUser0));
+        token0.approve(address(boringVault), type(uint256).max);
+        vm.stopPrank();
 
-    //     // Deposit using executor
-    //     intentsTeller.depositWithPermit(IntentsTeller.ActionData({
-    //         isWithdrawal: false,
-    //         user: testUser0,
-    //         to: testUser0,
-    //         asset: token1,
-    //         amountIn: amount,
-    //         minimumOut: 0,
-    //         rate: 1589835727,
-    //         deadline: block.timestamp + 1 days,
-    //         sig: _generateSignature(SigData(
-    //             testUser0Pk,
-    //             address(intentsTeller),
-    //             address(this),
-    //             testUser0,
-    //             address(token1),
-    //             false,
-    //             amount,
-    //             0,
-    //             block.timestamp + 1 days
-    //         ))
-    //     }),
-    //     block.timestamp + 1 days,
-    //     v,
-    //     r,
-    //     s
-    //     );
+        // Deposit using executor
+        intentsTeller.deposit(
+            IntentsTeller.ActionData({
+                isWithdrawal: false,
+                user: testUser0,
+                to: testUser0,
+                asset: token0,
+                amountIn: amount,
+                minimumOut: 1,
+                rate: 1589835727, // USDC per ETH
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token0),
+                        false,
+                        amount,
+                        1,
+                        block.timestamp + 1 days
+                    )
+                )
+            }),
+            true
+        );
 
-    //     assertEq(boringVault.balanceOf(testUser0), amount);
-    // }
+        assertEq(boringVault.balanceOf(testUser0), 1589835727);
+        assertEq(token0.balanceOf(testUser0), 0);
+
+        // Now Withdraw
+        intentsTeller.withdraw(
+            IntentsTeller.ActionData({
+                isWithdrawal: true,
+                user: testUser0,
+                to: testUser0,
+                asset: token0,
+                amountIn: 1589835727,
+                minimumOut: 1,
+                rate: 1589835727,
+                deadline: block.timestamp + 1 days,
+                sig: _generateSignature(
+                    SigData(
+                        testUser0Pk,
+                        address(intentsTeller),
+                        testUser0,
+                        address(token0),
+                        true,
+                        1589835727,
+                        1,
+                        block.timestamp + 1 days
+                    )
+                )
+            })
+        );
+
+        assertEq(boringVault.balanceOf(testUser0), 0);
+        assertApproxEqRel(token0.balanceOf(testUser0), amount, 1e12); //0.0001% error tolerance
+    }
+
+    function testMultipleAssetsDepositWithdraw() external {
+        revert();
+    }
+
+    function testBulkActions() external {
+        revert();
+    }
 
     // ========================================= TESTS FOR FAILURES =========================================
 
     function testDepositFailsActionMismatch() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -675,7 +691,7 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ActionMismatch.selector));
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
                 isWithdrawal: true, // This causes the expected failure
@@ -698,12 +714,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
     }
 
     function testDepositFailsSigActionMismatch() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -736,12 +753,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
     }
 
     function testDepositFailsAmountMismatch() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -774,12 +792,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
     }
 
     function testDepositFailsFromOtherUser() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -812,12 +831,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
     }
 
     function testDepositFailsToDifferentUser() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -850,12 +870,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
     }
 
     function testDepositFailsDeadlinePassed() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -888,12 +909,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp - 1
                     )
                 )
-            })
+            }),
+            true
         );
     }
 
     function testDepositFailsDeadlineTooFarInFuture() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -926,12 +948,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 7 days + 1
                     )
                 )
-            })
+            }),
+            true
         );
     }
 
     function testDepositFailsWhenMinOutNotMet() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -949,7 +972,7 @@ contract IntentsTellerTest is Test {
                 to: testUser0,
                 asset: token1,
                 amountIn: amount,
-                minimumOut: 1e18 + 1, // This causes the expected failure
+                minimumOut: 1e10 + 1, // This causes the expected failure
                 rate: 1589835727,
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
@@ -960,16 +983,17 @@ contract IntentsTellerTest is Test {
                         address(token1),
                         false,
                         amount,
-                        1e18 + 1,
+                        1e10 + 1,
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
     }
 
     function testWithdrawFailsWhenMinOutNotMet() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -1001,19 +1025,20 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
 
         // Withdraw using executor
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__MinimumAssetsNotMet.selector));
-        intentsTeller.bulkWithdraw(
+        intentsTeller.withdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
                 to: testUser0,
                 asset: token1,
                 amountIn: amount / 2,
-                minimumOut: 1e18 + 1, // This causes the expected failure
+                minimumOut: 1e10 + 1, // This causes the expected failure
                 rate: 1589835727,
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
@@ -1024,7 +1049,7 @@ contract IntentsTellerTest is Test {
                         address(token1),
                         true,
                         amount / 2,
-                        1e18 + 1,
+                        1e10 + 1,
                         block.timestamp + 1 days
                     )
                 )
@@ -1033,7 +1058,7 @@ contract IntentsTellerTest is Test {
     }
 
     function testDepositFailsWithBadRate() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -1055,7 +1080,7 @@ contract IntentsTellerTest is Test {
                 to: testUser0,
                 asset: token1,
                 amountIn: amount,
-                minimumOut: 1e18,
+                minimumOut: 1e10,
                 rate: 1595713474, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
@@ -1066,11 +1091,12 @@ contract IntentsTellerTest is Test {
                         address(token1),
                         false,
                         amount,
-                        1e18,
+                        1e10,
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
 
         // Deposit using executor (rate too low)
@@ -1086,7 +1112,7 @@ contract IntentsTellerTest is Test {
                 to: testUser0,
                 asset: token1,
                 amountIn: amount,
-                minimumOut: 1e18,
+                minimumOut: 1e10,
                 rate: 1579835726, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
@@ -1097,16 +1123,17 @@ contract IntentsTellerTest is Test {
                         address(token1),
                         false,
                         amount,
-                        1e18,
+                        1e10,
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
     }
 
     function testWithdrawFailsWithBadRate() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -1123,7 +1150,7 @@ contract IntentsTellerTest is Test {
                 to: testUser0,
                 asset: token1,
                 amountIn: amount,
-                minimumOut: 1e18,
+                minimumOut: 1e10,
                 rate: 1593713474, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
@@ -1134,11 +1161,12 @@ contract IntentsTellerTest is Test {
                         address(token1),
                         false,
                         amount,
-                        1e18,
+                        1e10,
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
 
         // Withdraw using executor (rate too high)
@@ -1147,14 +1175,14 @@ contract IntentsTellerTest is Test {
                 ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 159571347400, 157983572700, 159571347300
             )
         );
-        intentsTeller.bulkWithdraw(
+        intentsTeller.withdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
                 to: testUser0,
                 asset: token1,
                 amountIn: amount,
-                minimumOut: 1e18,
+                minimumOut: 1e10,
                 rate: 1595713474, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
@@ -1165,7 +1193,7 @@ contract IntentsTellerTest is Test {
                         address(token1),
                         true,
                         amount,
-                        1e18,
+                        1e10,
                         block.timestamp + 1 days
                     )
                 )
@@ -1178,14 +1206,14 @@ contract IntentsTellerTest is Test {
                 ChainlinkDatum.ChainlinkDatum__InvalidExchangeRate.selector, 157983572600, 157983572700, 159571347300
             )
         );
-        intentsTeller.bulkWithdraw(
+        intentsTeller.withdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
                 to: testUser0,
                 asset: token1,
                 amountIn: amount,
-                minimumOut: 1e18,
+                minimumOut: 1e10,
                 rate: 1579835726, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
@@ -1196,7 +1224,7 @@ contract IntentsTellerTest is Test {
                         address(token1),
                         true,
                         amount,
-                        1e18,
+                        1e10,
                         block.timestamp + 1 days
                     )
                 )
@@ -1205,7 +1233,7 @@ contract IntentsTellerTest is Test {
     }
 
     function testDepositFailsZeroAssets() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -1238,12 +1266,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            false
         );
     }
 
     function testWithdrawFailsZeroShares() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -1275,12 +1304,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
 
         // Attempt Withdraw using executor
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ZeroShares.selector));
-        intentsTeller.bulkWithdraw(
+        intentsTeller.withdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
@@ -1308,7 +1338,7 @@ contract IntentsTellerTest is Test {
     }
 
     function testDepositsFailWhenAssetNotSupported() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
 
         // Deposit using executor
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__AssetNotSupported.selector));
@@ -1334,12 +1364,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            false
         );
     }
 
     function testWithdrawsFailWhenAssetNotSupported() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -1371,12 +1402,13 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            false
         );
 
         // Deposit using executor
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__AssetNotSupported.selector));
-        intentsTeller.bulkWithdraw(
+        intentsTeller.withdraw(
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
@@ -1403,7 +1435,7 @@ contract IntentsTellerTest is Test {
     }
 
     function testRefundDepositFails() external {
-        uint256 amount = 1e18;
+        uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
 
@@ -1437,7 +1469,8 @@ contract IntentsTellerTest is Test {
                         block.timestamp + 1 days
                     )
                 )
-            })
+            }),
+            true
         );
 
         assertEq(boringVault.balanceOf(testUser0), amount);
