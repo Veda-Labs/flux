@@ -11,9 +11,9 @@ import {Auth, Authority} from "@solmate/src/auth/Auth.sol";
 import {ReentrancyGuard} from "@solmate/src/utils/ReentrancyGuard.sol";
 import {IPausable} from "src/interfaces/IPausable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
-contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
+contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, EIP712 {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
 
@@ -185,6 +185,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
 
     constructor(address _owner, address _vault, address _fluxManager, uint64 _maxDeadlinePeriod)
         Auth(_owner, Authority(address(0)))
+        EIP712("IntentsTeller", "1")
     {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
@@ -534,10 +535,10 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
         // Recreate the signed message and verify the signature
         // Signature does not include rate as rate is specified by executor at execution time
         bytes32 messageHash = keccak256(
-            abi.encodePacked(
+            abi.encode(
                 address(this), // teller
                 actionData.to, // receiver
-                actionData.asset,
+                actionData.asset, // asset
                 actionData.isWithdrawal, // type
                 actionData.amountIn, // amount
                 actionData.minimumOut, // minimumOut
@@ -545,7 +546,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable {
             )
         );
 
-        bytes32 signedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        bytes32 signedMessageHash = EIP712._hashTypedDataV4(messageHash);
         address signer = ECDSA.recover(signedMessageHash, actionData.sig);
 
         if (signer != actionData.user) {
