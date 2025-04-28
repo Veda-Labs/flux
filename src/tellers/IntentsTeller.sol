@@ -183,9 +183,9 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      */
     uint256 internal immutable ONE_SHARE;
 
-    constructor(address _owner, address _vault, address _fluxManager, uint64 _maxDeadlinePeriod)
+    constructor(address _owner, address _vault, address _fluxManager, string memory _name, string memory _version, uint64 _maxDeadlinePeriod)
         Auth(_owner, Authority(address(0)))
-        EIP712("IntentsTeller", "1")
+        EIP712(_name, _version)
     {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
@@ -534,7 +534,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     function _verifySignedMessage(ActionData memory actionData) internal {
         // Recreate the signed message and verify the signature
         // Signature does not include rate as rate is specified by executor at execution time
-        bytes32 messageHash = keccak256(
+        bytes32 digest = _hashTypedDataV4(keccak256(
             abi.encode(
                 address(this), // teller
                 actionData.to, // receiver
@@ -544,10 +544,9 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
                 actionData.minimumOut, // minimumOut
                 actionData.deadline // deadline
             )
-        );
+        ));
 
-        bytes32 signedMessageHash = EIP712._hashTypedDataV4(messageHash);
-        address signer = ECDSA.recover(signedMessageHash, actionData.sig);
+        address signer = ECDSA.recover(digest, actionData.sig);
 
         if (signer != actionData.user) {
             revert IntentsTeller__InvalidSignature();
@@ -558,10 +557,10 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         if (actionData.deadline > block.timestamp + maxDeadlinePeriod) {
             revert IntentsTeller__DeadlineOutsideMaxPeriod();
         }
-        if (usedSignatures[signedMessageHash]) {
+        if (usedSignatures[digest]) {
             revert IntentsTeller__DuplicateSignature();
         }
 
-        usedSignatures[signedMessageHash] = true;
+        usedSignatures[digest] = true;
     }
 }

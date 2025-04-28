@@ -14,7 +14,8 @@ import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
 import {TickMath} from "@uni-v3-c/libraries/TickMath.sol";
 import {ChainlinkDatum} from "src/datums/ChainlinkDatum.sol";
 import {FixedPointMathLib} from "@solmate/src/utils/FixedPointMathLib.sol";
-import {IntentsTeller, MessageHashUtils} from "src/tellers/IntentsTeller.sol";
+import {IntentsTeller, EIP712} from "src/tellers/IntentsTeller.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 contract IntentsTellerTest is Test {
     using Address for address;
@@ -99,7 +100,7 @@ contract IntentsTellerTest is Test {
             universalRouter
         );
 
-        intentsTeller = new IntentsTeller(address(this), address(boringVault), address(manager), 86400 * 7);
+        intentsTeller = new IntentsTeller(address(this), address(boringVault), address(manager), "Intents Teller", "2", 86400 * 7);
 
         intentsTeller.setAuthority(rolesAuthority);
 
@@ -1699,9 +1700,13 @@ contract IntentsTellerTest is Test {
         vm.selectFork(forkId);
     }
 
-    function _generateSignature(SigData memory sigData) internal pure returns (bytes memory sig) {
+    function _generateSignature(SigData memory sigData) internal view returns (bytes memory sig) {
+        bytes32 TYPE_HASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+        // Get the domain separator from the contract
+        bytes32 domainSeparator = keccak256(abi.encode(TYPE_HASH, keccak256(bytes("Intents Teller")), keccak256(bytes("2")), block.chainid, address(intentsTeller)));
+        
         bytes32 hash = keccak256(
-            abi.encodePacked(
+            abi.encode(
                 sigData.teller,
                 sigData.to,
                 sigData.asset,
@@ -1711,8 +1716,13 @@ contract IntentsTellerTest is Test {
                 sigData.deadline
             )
         );
-        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(hash);
+        bytes32 digest = MessageHashUtils.toTypedDataHash(domainSeparator, hash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(sigData.pK, digest);
         sig = abi.encodePacked(r, s, v);
     }
+
+    // function _hashTypedDataV4(bytes32 structHash) internal view virtual returns (bytes32) {
+    //     return MessageHashUtils.toTypedDataHash(_domainSeparatorV4(), structHash);
+    // }
+
 }
