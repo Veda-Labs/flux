@@ -76,8 +76,6 @@ contract UniswapV4FluxManager is FluxManager {
 
     uint16 public rebalanceDeviationMin;
     uint16 public rebalanceDeviationMax;
-    int24 public referenceTickLower;
-    int24 public referenceTickUpper;
     address internal aggregator;
 
     uint128 internal token0Balance;
@@ -94,7 +92,6 @@ contract UniswapV4FluxManager is FluxManager {
     error UniswapV4FluxManager__PositionNotFound();
     error UniswapV4FluxManager__RebalanceDeviation(uint256 result, uint256 min, uint256 max);
     error UniswapV4FluxManager__RebalanceChangedTotalSupply();
-    error UniswapV4FluxManager__BadReferenceTick();
     error UniswapV4FluxManager__BadRebalanceDeviation();
     error UniswapV4FluxManager__SwapAggregatorBadToken0();
     error UniswapV4FluxManager__SwapAggregatorBadToken1();
@@ -103,7 +100,6 @@ contract UniswapV4FluxManager is FluxManager {
     /*                         EVENTS                             */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    event ReferenceTicksSet();
     event AggregatorSet();
     event RebalanceDeviationSet();
     event Rebalanced();
@@ -143,9 +139,6 @@ contract UniswapV4FluxManager is FluxManager {
         positionManager = IPositionManager(_positionManager);
         universalRouter = _universalRouter;
 
-        referenceTickLower = MIN_TICK;
-        referenceTickUpper = MAX_TICK;
-
         // Set to sensible defaults.
         rebalanceDeviationMin = 0.99e4;
         rebalanceDeviationMax = 1.01e4;
@@ -158,18 +151,6 @@ contract UniswapV4FluxManager is FluxManager {
     function setAggregator(address _aggregator) external requiresAuth {
         aggregator = _aggregator;
         emit AggregatorSet();
-    }
-
-    function setReferenceTicks(int24 newLower, int24 newUpper, bool token0Or1) external requiresAuth {
-        if (newLower >= newUpper) {
-            revert UniswapV4FluxManager__BadReferenceTick();
-        }
-        _claimFees(token0Or1);
-        referenceTickLower = newLower;
-        referenceTickUpper = newUpper;
-        _refreshInternalFluxAccounting();
-
-        emit ReferenceTicksSet();
     }
 
     function setRebalanceDeviations(uint16 min, uint16 max) external requiresAuth {
