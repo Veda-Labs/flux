@@ -62,9 +62,6 @@ contract UniswapV4FluxManager is FluxManager {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
-    uint128 internal constant REFERENCE_LIQUIDITY = 1_000_000_000;
-    int24 internal constant MIN_TICK = -887_270;
-    int24 internal constant MAX_TICK = 887_270;
     bytes4 internal constant PERMIT2_APPROVE_SELECTOR =
         bytes4(keccak256(abi.encodePacked("approve(address,address,uint160,uint48)")));
     uint16 internal constant MIN_REBALANCE_DEVIATION = 0.9e4;
