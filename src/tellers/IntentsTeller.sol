@@ -42,10 +42,18 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         bytes sig;
     }
 
+    /**
+     * @param denyFrom bool indicating whether or not the user is on the deny from list.
+     * @param denyTo bool indicating whether or not the user is on the deny to list.
+     * @param denyOperator bool indicating whether or not the user is on the deny operator list.
+     * @param permissionedOperator bool indicating whether or not the user is a permissioned operator, only applies when permissionedTransfers is true.
+     * @param shareUnlockTime uint256 indicating the time at which the shares will be unlocked.
+     */
     struct BeforeTransferData {
         bool denyFrom;
         bool denyTo;
         bool denyOperator;
+        bool permissionedOperator;
         uint256 shareUnlockTime;
     }
 
@@ -108,6 +116,11 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     bool public isPaused;
 
     /**
+     * @notice If true, only permissioned operators can transfer shares.
+     */
+    bool public permissionedTransfers;
+
+    /**
      * @dev Maps deposit nonce to keccak256(address receiver, address depositAsset, uint256 depositAmount, uint256 shareAmount, uint256 timestamp, uint256 shareLockPeriod).
      */
     mapping(uint256 => bytes32) public publicDepositHistory;
@@ -168,8 +181,9 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     event AllowFrom(address indexed user);
     event AllowTo(address indexed user);
     event AllowOperator(address indexed user);
-
-    event RateSignerSet(address indexed rateSigner);
+    event PermissionedTransfersSet(bool permissionedTransfers);
+    event AllowPermissionedOperator(address indexed operator);
+    event DenyPermissionedOperator(address indexed operator);
 
     //============================== IMMUTABLES ===============================
 
@@ -193,6 +207,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         token0 = fluxManager.token0();
         token1 = fluxManager.token1();
         maxDeadlinePeriod = uint64(_maxDeadlinePeriod);
+        permissionedTransfers = false;
     }
 
     // ========================================= ADMIN FUNCTIONS =========================================
@@ -256,6 +271,33 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      */
     function setMaxDeadlinePeriod(uint64 _maxDeadlinePeriod) external requiresAuth {
         maxDeadlinePeriod = _maxDeadlinePeriod;
+    }
+
+    /**
+     * @notice Set the permissioned transfers flag.
+     * @dev Callable by OWNER_ROLE.
+     */
+    function setPermissionedTransfers(bool _permissionedTransfers) external requiresAuth {
+        permissionedTransfers = _permissionedTransfers;
+        emit PermissionedTransfersSet(_permissionedTransfers);
+    }
+
+    /**
+     * @notice Give permission to an operator to transfer shares when permissioned transfers flag is true.
+     * @dev Callable by OWNER_ROLE.
+     */
+    function allowPermissionedOperator(address operator) external requiresAuth {
+        beforeTransferData[operator].permissionedOperator = true;
+        emit AllowPermissionedOperator(operator);
+    }
+
+    /**
+     * @notice Revoke permission from an operator to transfer shares when permissioned transfers flag is true.
+     * @dev Callable by OWNER_ROLE, and DENIER_ROLE.
+     */
+    function denyPermissionedOperator(address operator) external requiresAuth {
+        beforeTransferData[operator].permissionedOperator = false;
+        emit DenyPermissionedOperator(operator);
     }
 
     /**
@@ -342,11 +384,12 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
 
     /**
      * @notice Implement beforeTransfer hook to check if shares are locked, or if `from`, `to`, or `operator` are on the deny list.
+     * @notice If permissionedTransfers is true, then only operators on the allow list can transfer shares.
      * @notice If share lock period is set to zero, then users will be able to mint and transfer in the same tx.
      *         if this behavior is not desired then a share lock period of >=1 should be used.
      */
     function beforeTransfer(address from, address to, address operator) public view virtual {
-        if (beforeTransferData[from].denyFrom || beforeTransferData[to].denyTo || beforeTransferData[operator].denyOperator) {
+        if (beforeTransferData[from].denyFrom || beforeTransferData[to].denyTo || beforeTransferData[operator].denyOperator || (permissionedTransfers && !beforeTransferData[operator].permissionedOperator)) {
             revert IntentsTeller__TransferDenied(from, to, operator);
         }
         if (beforeTransferData[from].shareUnlockTime > block.timestamp) {
@@ -458,7 +501,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
 
         fluxManager.refreshInternalFluxAccounting();
 
-        shares = depositData.amountIn.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, depositData.asset == token0)); // TODO check rate direction
+        shares = depositData.amountIn.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, depositData.asset == token0));
 
         Asset memory asset = _beforeDeposit(depositData.asset);
         shares = asset.sharePremium > 0 ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4) : shares;
@@ -466,7 +509,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
             revert IntentsTeller__MinimumMintNotMet();
         }
         
-        beforeTransfer(address(0), depositData.to, msg.sender); // TODO: check these are the correct addrs
         vault.enter(depositData.user, depositData.asset, depositData.amountIn, depositData.to, shares);
         
         if (enforceShareLock) {
@@ -494,7 +536,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
             revert IntentsTeller__MinimumAssetsNotMet();
         }
 
-        beforeTransfer(withdrawData.user, address(0), msg.sender); // TODO: check these are the correct addrs
         vault.exit(withdrawData.to, withdrawData.asset, assetsOut, withdrawData.user, withdrawData.amountIn);
         emit Withdraw(address(withdrawData.asset), withdrawData.amountIn);
     }
