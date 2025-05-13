@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.24;
 
-import {FluxManager, FixedPointMathLib, SafeCast} from "src/FluxManager.sol";
+import {FluxManager, FixedPointMathLib, SafeCast} from "src/managers/FluxManager.sol";
 import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
 import {TickMath} from "@uni-v3-c/libraries/TickMath.sol";
 import {IPositionManager} from "@uni-v4-p/interfaces/IPositionManager.sol";

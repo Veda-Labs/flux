@@ -3,7 +3,7 @@ pragma solidity 0.8.24;
 
 import {ERC20} from "@solmate/src/tokens/ERC20.sol";
 import {BoringVault} from "src/BoringVault.sol";
-import {FluxManager} from "src/FluxManager.sol";
+import {FluxManager} from "src/managers/FluxManager.sol";
 import {FixedPointMathLib} from "@solmate/src/utils/FixedPointMathLib.sol";
 import {SafeTransferLib} from "@solmate/src/utils/SafeTransferLib.sol";
 import {BeforeTransferHook} from "src/interfaces/BeforeTransferHook.sol";
