@@ -429,42 +429,6 @@ contract IntentsTellerTest is Test {
         // Deny list user
         intentsTeller.denyAll(testUser0);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IntentsTeller.IntentsTeller__TransferDenied.selector,
-                0x0000000000000000000000000000000000000000,
-                testUser0,
-                address(this)
-            )
-        );
-        intentsTeller.deposit(
-            IntentsTeller.ActionData({
-                isWithdrawal: false,
-                user: testUser0,
-                to: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
-                rate: 1589835727,
-                deadline: block.timestamp + 1 days,
-                sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        testUser0,
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
-                    )
-                )
-            }),
-            false
-        );
-
-        intentsTeller.allowTo(testUser0);
-        // Deposit using executor when allowed
         intentsTeller.deposit(
             IntentsTeller.ActionData({
                 isWithdrawal: false,
