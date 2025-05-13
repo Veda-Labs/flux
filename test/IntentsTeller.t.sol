@@ -417,7 +417,7 @@ contract IntentsTellerTest is Test {
         assertEq(token1.balanceOf(testUser0), amount / 2);
     }
 
-    function testDenyList() external {
+    function testTransferDenials() external {
         uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
@@ -461,6 +461,65 @@ contract IntentsTellerTest is Test {
             )
         );
         boringVault.transfer(address(this), amount);
+
+        intentsTeller.allowTo(testUser0);
+
+        vm.prank(testUser0);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IntentsTeller.IntentsTeller__TransferDenied.selector, testUser0, address(this), testUser0
+            )
+        );
+        boringVault.transfer(address(this), amount);
+
+        intentsTeller.allowFrom(testUser0);
+        vm.prank(testUser0);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IntentsTeller.IntentsTeller__TransferDenied.selector, testUser0, address(this), testUser0
+            )
+        );
+        boringVault.transfer(address(this), amount);
+
+        intentsTeller.allowOperator(testUser0);
+        vm.prank(testUser0);
+        boringVault.transfer(address(this), 1e5);
+
+        intentsTeller.setPermissionedTransfers(true);
+        vm.prank(testUser0);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IntentsTeller.IntentsTeller__TransferDenied.selector, testUser0, address(this), testUser0
+            )
+        );
+        boringVault.transfer(address(this), 1e5);
+
+        intentsTeller.allowPermissionedOperator(testUser0);
+        vm.prank(testUser0);
+        boringVault.transfer(address(this), 2e8);
+
+        intentsTeller.denyAll(testUser0);
+        vm.prank(testUser0);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IntentsTeller.IntentsTeller__TransferDenied.selector, testUser0, address(this), testUser0
+            )
+        );
+        boringVault.transfer(address(this), 2e8);
+
+        intentsTeller.allowAll(testUser0);
+        vm.prank(testUser0);
+        boringVault.transfer(address(this), 1e8);
+
+        intentsTeller.denyPermissionedOperator(testUser0);
+        vm.prank(testUser0);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IntentsTeller.IntentsTeller__TransferDenied.selector, testUser0, address(this), testUser0
+            )
+        );
+        boringVault.transfer(address(this), 3e7);
+
     }
 
     function testShareLockPeriod() external {
