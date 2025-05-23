@@ -73,7 +73,7 @@ contract UniswapV4FluxManager is FluxManager {
 
     uint16 public rebalanceDeviationMin;
     uint16 public rebalanceDeviationMax;
-    address internal aggregator;
+    mapping(address => bool) internal aggregators;
 
     uint128 internal token0Balance;
     uint128 internal token1Balance;
@@ -92,13 +92,14 @@ contract UniswapV4FluxManager is FluxManager {
     error UniswapV4FluxManager__BadRebalanceDeviation();
     error UniswapV4FluxManager__SwapAggregatorBadToken0();
     error UniswapV4FluxManager__SwapAggregatorBadToken1();
+    error UniswapV4FluxManager__InvalidAggregator();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         EVENTS                             */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    event AggregatorSet();
-    event RebalanceDeviationSet();
+    event AggregatorSet(address indexed aggregator, bool isAggregator);
+    event RebalanceDeviationSet(uint256 min, uint256 max);
     event Rebalanced();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -145,9 +146,9 @@ contract UniswapV4FluxManager is FluxManager {
     /*                    ADMIN FUNCTIONS                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function setAggregator(address _aggregator) external requiresAuth {
-        aggregator = _aggregator;
-        emit AggregatorSet();
+    function setAggregator(address _aggregator, bool _isAggregator) external requiresAuth {
+        aggregators[_aggregator] = _isAggregator;
+        emit AggregatorSet(_aggregator, _isAggregator);
     }
 
     function setRebalanceDeviations(uint16 min, uint16 max) external requiresAuth {
@@ -157,7 +158,7 @@ contract UniswapV4FluxManager is FluxManager {
         rebalanceDeviationMin = min;
         rebalanceDeviationMax = max;
 
-        emit RebalanceDeviationSet();
+        emit RebalanceDeviationSet(min, max);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -269,9 +270,9 @@ contract UniswapV4FluxManager is FluxManager {
                     abi.decode(action.data, (uint128, uint128, uint256));
                 _swapToken0ForToken1InPool(amount1In, minAmount0Out, deadline);
             } else if (action.kind == ActionKind.SWAP_WITH_AGGREGATOR) {
-                (uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData) =
-                    abi.decode(action.data, (uint256, bool, uint256, bytes));
-                _swapWithAggregator(amount, token0Or1, minAmountOut, swapData);
+                (address aggregator, uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData) =
+                    abi.decode(action.data, (address, uint256, bool, uint256, bytes));
+                _swapWithAggregator(aggregator, amount, token0Or1, minAmountOut, swapData);
             }
         }
         _wrapAllNative();
@@ -489,9 +490,11 @@ contract UniswapV4FluxManager is FluxManager {
         boringVault.manage(universalRouter, swapData, 0);
     }
 
-    function _swapWithAggregator(uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData)
+    function _swapWithAggregator(address aggregator, uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData)
         internal
     {
+        // check that the aggregator is a valid aggregator
+        if (aggregators[aggregator] == false) revert UniswapV4FluxManager__InvalidAggregator();
         bytes memory approveCalldata = abi.encodeWithSelector(ERC20.approve.selector, aggregator, amount);
         if (token0Or1) {
             // Approve the aggregator to spend tokens.
