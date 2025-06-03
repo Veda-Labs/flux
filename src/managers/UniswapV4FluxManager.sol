@@ -71,6 +71,7 @@ contract UniswapV4FluxManager is FluxManager {
     /*                         STATE                              */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    address public hook;
     uint16 public rebalanceDeviationMin;
     uint16 public rebalanceDeviationMax;
     mapping(address => bool) internal aggregators;
@@ -120,7 +121,8 @@ contract UniswapV4FluxManager is FluxManager {
         uint16 _datumLowerBound,
         uint16 _datumUpperBound,
         address _positionManager,
-        address _universalRouter
+        address _universalRouter,
+        address _hook
     )
         FluxManager(
             _owner,
@@ -136,6 +138,7 @@ contract UniswapV4FluxManager is FluxManager {
     {
         positionManager = IPositionManager(_positionManager);
         universalRouter = _universalRouter;
+        hook = _hook;
 
         // Set to sensible defaults.
         rebalanceDeviationMin = 0.99e4;
@@ -213,7 +216,9 @@ contract UniswapV4FluxManager is FluxManager {
         requiresAuth
     {
         _refreshInternalFluxAccounting();
-        _unwrapAllNative();
+        if (address(token0) == address(0)) {
+            _unwrapAllNative();
+        }
         uint256 totalSupplyBefore = boringVault.totalSupply();
         uint256 totalAssetsInBaseBefore = totalAssets(exchangeRate, baseIn0Or1);
         for (uint256 i; i < actions.length; ++i) {
@@ -262,20 +267,22 @@ contract UniswapV4FluxManager is FluxManager {
                 (uint256 positionId, uint256 deadline) = abi.decode(action.data, (uint256, uint256));
                 _collectFees(positionId, deadline);
             } else if (action.kind == ActionKind.SWAP_TOKEN0_FOR_TOKEN1_IN_POOL) {
-                (uint128 amount0In, uint128 minAmount1Out, uint256 deadline) =
-                    abi.decode(action.data, (uint128, uint128, uint256));
-                _swapToken0ForToken1InPool(amount0In, minAmount1Out, deadline);
+                (uint128 amount0In, uint128 minAmount1Out, uint256 deadline, bytes memory hookData) =
+                    abi.decode(action.data, (uint128, uint128, uint256, bytes));
+                _swapToken0ForToken1InPool(amount0In, minAmount1Out, deadline, hookData);
             } else if (action.kind == ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL) {
-                (uint128 amount1In, uint128 minAmount0Out, uint256 deadline) =
-                    abi.decode(action.data, (uint128, uint128, uint256));
-                _swapToken0ForToken1InPool(amount1In, minAmount0Out, deadline);
+                (uint128 amount1In, uint128 minAmount0Out, uint256 deadline, bytes memory hookData) =
+                    abi.decode(action.data, (uint128, uint128, uint256, bytes));
+                _swapToken0ForToken1InPool(amount1In, minAmount0Out, deadline, hookData);
             } else if (action.kind == ActionKind.SWAP_WITH_AGGREGATOR) {
                 (address aggregator, uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData) =
                     abi.decode(action.data, (address, uint256, bool, uint256, bytes));
                 _swapWithAggregator(aggregator, amount, token0Or1, minAmountOut, swapData);
             }
         }
-        _wrapAllNative();
+        if (address(token0) == address(0)) {
+            _wrapAllNative();
+        }
         _refreshInternalFluxAccounting();
 
         // Make sure totalSupply is constant.
@@ -347,7 +354,7 @@ contract UniswapV4FluxManager is FluxManager {
         );
         bytes[] memory params = new bytes[](4);
         PoolKey memory poolKey =
-            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(address(0)));
+            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(hook));
 
         params[0] = abi.encode(poolKey, tickLower, tickUpper, liquidity, amount0Max, amount1Max, boringVault, hex"");
         params[1] = abi.encode(token0, token1);
@@ -422,7 +429,7 @@ contract UniswapV4FluxManager is FluxManager {
         _modifyLiquidities(actions, params, deadline, 0);
     }
 
-    function _swapToken0ForToken1InPool(uint128 amount0In, uint128 minAmount1Out, uint256 deadline) internal {
+    function _swapToken0ForToken1InPool(uint128 amount0In, uint128 minAmount1Out, uint256 deadline, bytes memory hookData) internal {
         bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));
         // Encode V4Router actions
         bytes memory actions =
@@ -431,7 +438,7 @@ contract UniswapV4FluxManager is FluxManager {
         bytes[] memory params = new bytes[](3);
 
         PoolKey memory poolKey =
-            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(address(0)));
+            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(hook));
 
         // First parameter: swap configuration
         params[0] = abi.encode(
@@ -440,7 +447,7 @@ contract UniswapV4FluxManager is FluxManager {
                 zeroForOne: true, // true if we're swapping token0 for token1
                 amountIn: amount0In, // amount of tokens we're swapping
                 amountOutMinimum: minAmount1Out, // minimum amount we expect to receive
-                hookData: bytes("") // no hook data needed
+                hookData: hookData // depends on the hook
             })
         );
         params[1] = abi.encode(token0, amount0In);
@@ -456,7 +463,7 @@ contract UniswapV4FluxManager is FluxManager {
         boringVault.manage(universalRouter, swapData, address(token0) == address(0) ? amount0In : 0);
     }
 
-    function _swapToken1ForToken0InPool(uint128 amount1In, uint128 minAmount0Out, uint256 deadline) internal {
+    function _swapToken1ForToken0InPool(uint128 amount1In, uint128 minAmount0Out, uint256 deadline, bytes memory hookData) internal {
         bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));
         // Encode V4Router actions
         bytes memory actions =
@@ -465,7 +472,7 @@ contract UniswapV4FluxManager is FluxManager {
         bytes[] memory params = new bytes[](3);
 
         PoolKey memory poolKey =
-            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(address(0)));
+            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(hook));
 
         // First parameter: swap configuration
         params[0] = abi.encode(
@@ -474,7 +481,7 @@ contract UniswapV4FluxManager is FluxManager {
                 zeroForOne: false, // false if we're swapping token1 for token0
                 amountIn: amount1In, // amount of tokens we're swapping
                 amountOutMinimum: minAmount0Out, // minimum amount we expect to receive
-                hookData: bytes("") // no hook data needed
+                hookData: hookData // depends on the hook
             })
         );
         params[1] = abi.encode(token1, amount1In);

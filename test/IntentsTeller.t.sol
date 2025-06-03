@@ -97,7 +97,8 @@ contract IntentsTellerTest is Test {
             0.995e4,
             1.005e4,
             positionManager,
-            universalRouter
+            universalRouter,
+            address(0)
         );
 
         intentsTeller = new IntentsTeller(address(this), address(boringVault), address(manager), "Intents Teller", "2", 86400 * 7);

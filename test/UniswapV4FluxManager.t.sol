@@ -31,6 +31,7 @@ contract UniswapV4FluxManagerTest is Test {
     IPoolManager internal poolManager = IPoolManager(0x000000000004444c5dc75cB358380D2e3dE08A90);
     PoolId internal eth_usdc_pool_id = PoolId.wrap(0x21c67e77068de97969ba93d4aab21826d33ca12bb9f565d8496e8fda8a82ca27);
     address internal ETH_USD_ORACLE = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
+    address internal hook = address(0);
 
     address internal payout = vm.addr(1);
 
@@ -66,7 +67,8 @@ contract UniswapV4FluxManagerTest is Test {
             0.995e4,
             1.005e4,
             positionManager,
-            universalRouter
+            universalRouter,
+            hook
         );
 
         manager.setPayout(payout);
@@ -219,14 +221,14 @@ contract UniswapV4FluxManagerTest is Test {
 
         UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](2);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN0_FOR_TOKEN1_IN_POOL;
-        actions[0].data = abi.encode(ethAmount / 2, 0, block.timestamp);
+        actions[0].data = abi.encode(ethAmount / 2, 0, block.timestamp, bytes(""));
         actions[1].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
-        actions[1].data = abi.encode(usdcAmount / 2, 0, block.timestamp);
+        actions[1].data = abi.encode(usdcAmount / 2, 0, block.timestamp, bytes(""));
         manager.rebalance(price, actions);
     }
 
     function testAggregatorSwapping() external {
-        manager.setAggregator(address(this));
+        manager.setAggregator(address(this), true);
         uint256 ethAmount = 1e18;
         uint256 usdcAmount = 10_000e6;
         deal(nativeWrapper, address(boringVault), ethAmount);
@@ -321,7 +323,7 @@ contract UniswapV4FluxManagerTest is Test {
 
         deal(address(token1), address(boringVault), 100e6);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
-        actions[0].data = abi.encode(100e6, 0, block.timestamp);
+        actions[0].data = abi.encode(100e6, 0, block.timestamp, bytes(""));
         manager.rebalance(price, actions);
 
         actions = new UniswapV4FluxManager.Action[](1);
