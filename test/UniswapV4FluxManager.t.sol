@@ -244,7 +244,7 @@ contract UniswapV4FluxManagerTest is Test {
         swapData = abi.encodeWithSelector(this.swap.selector, token0, ethAmount, token1, expectedAmountOut);
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
-        actions[0].data = abi.encode(ethAmount / 2, true, expectedAmountOut, swapData);
+        actions[0].data = abi.encode(address(this), ethAmount / 2, true, expectedAmountOut, swapData);
         manager.rebalance(price, actions);
 
         // Failure not meeting min amount out
@@ -253,7 +253,7 @@ contract UniswapV4FluxManagerTest is Test {
         );
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
-        actions[0].data = abi.encode(ethAmount / 2, true, expectedAmountOut, swapData);
+        actions[0].data = abi.encode(address(this), ethAmount / 2, true, expectedAmountOut, swapData);
         vm.expectRevert(
             bytes(abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__SwapAggregatorBadToken1.selector))
         );
@@ -265,7 +265,7 @@ contract UniswapV4FluxManagerTest is Test {
         );
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
-        actions[0].data = abi.encode(ethAmount / 2, true, expectedAmountOut, swapData);
+        actions[0].data = abi.encode(address(this), ethAmount / 2, true, expectedAmountOut, swapData);
         vm.expectRevert(
             bytes(
                 abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__RebalanceChangedTotalSupply.selector)
@@ -277,7 +277,7 @@ contract UniswapV4FluxManagerTest is Test {
         swapData = abi.encodeWithSelector(this.badSwapNotSpendingAllApproval.selector, token1, usdcAmount, token0, 1);
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
-        actions[0].data = abi.encode(usdcAmount, false, 1, swapData);
+        actions[0].data = abi.encode(address(this), usdcAmount, false, 1, swapData);
         vm.expectRevert(
             bytes(abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__SwapAggregatorBadToken1.selector))
         );
