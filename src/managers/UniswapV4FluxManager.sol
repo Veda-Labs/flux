@@ -57,6 +57,23 @@ contract UniswapV4FluxManager is FluxManager {
         int24 tickUpper;
     }
 
+    struct ConstructorArgs {
+        address owner;
+        address boringVault;
+        address token0;
+        address token1;
+        bool baseIn0Or1;
+        address nativeWrapper;
+        address datum;
+        uint16 datumLowerBound;
+        uint16 datumUpperBound;
+        address positionManager;
+        address universalRouter;
+        address hook;
+        uint24 poolFee;
+        int24 tickSpacing;
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CONSTANTS                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -72,6 +89,8 @@ contract UniswapV4FluxManager is FluxManager {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     address public hook;
+    uint24 public poolFee;
+    int24 public tickSpacing;
     uint16 public rebalanceDeviationMin;
     uint16 public rebalanceDeviationMax;
     mapping(address => bool) internal aggregators;
@@ -111,34 +130,25 @@ contract UniswapV4FluxManager is FluxManager {
     address internal immutable universalRouter;
 
     constructor(
-        address _owner,
-        address _boringVault,
-        address _token0,
-        address _token1,
-        bool _baseIn0Or1,
-        address _nativeWrapper,
-        address _datum,
-        uint16 _datumLowerBound,
-        uint16 _datumUpperBound,
-        address _positionManager,
-        address _universalRouter,
-        address _hook
+        ConstructorArgs memory _args
     )
         FluxManager(
-            _owner,
-            _boringVault,
-            _token0,
-            _token1,
-            _baseIn0Or1,
-            _nativeWrapper,
-            _datum,
-            _datumLowerBound,
-            _datumUpperBound
+            _args.owner,
+            _args.boringVault,
+            _args.token0,
+            _args.token1,
+            _args.baseIn0Or1,
+            _args.nativeWrapper,
+            _args.datum,
+            _args.datumLowerBound,
+            _args.datumUpperBound
         )
     {
-        positionManager = IPositionManager(_positionManager);
-        universalRouter = _universalRouter;
-        hook = _hook;
+        positionManager = IPositionManager(_args.positionManager);
+        universalRouter = _args.universalRouter;
+        hook = _args.hook;
+        poolFee = _args.poolFee;
+        tickSpacing = _args.tickSpacing;
 
         // Set to sensible defaults.
         rebalanceDeviationMin = 0.99e4;
@@ -354,7 +364,7 @@ contract UniswapV4FluxManager is FluxManager {
         );
         bytes[] memory params = new bytes[](4);
         PoolKey memory poolKey =
-            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(hook));
+            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), poolFee, tickSpacing, IHooks(hook));
 
         params[0] = abi.encode(poolKey, tickLower, tickUpper, liquidity, amount0Max, amount1Max, boringVault, hex"");
         params[1] = abi.encode(token0, token1);
@@ -438,7 +448,7 @@ contract UniswapV4FluxManager is FluxManager {
         bytes[] memory params = new bytes[](3);
 
         PoolKey memory poolKey =
-            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(hook));
+            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), poolFee, tickSpacing, IHooks(hook));
 
         // First parameter: swap configuration
         params[0] = abi.encode(
@@ -472,7 +482,7 @@ contract UniswapV4FluxManager is FluxManager {
         bytes[] memory params = new bytes[](3);
 
         PoolKey memory poolKey =
-            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), 500, 10, IHooks(hook));
+            PoolKey(Currency.wrap(address(token0)), Currency.wrap(address(token1)), poolFee, tickSpacing, IHooks(hook));
 
         // First parameter: swap configuration
         params[0] = abi.encode(

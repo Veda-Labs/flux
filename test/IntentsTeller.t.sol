@@ -87,6 +87,7 @@ contract IntentsTellerTest is Test {
         datum = new ChainlinkDatum(ETH_USD_ORACLE, 1 days, false);
 
         manager = new UniswapV4FluxManager(
+            UniswapV4FluxManager.ConstructorArgs(
             address(this),
             address(boringVault),
             address(token0),
@@ -98,8 +99,10 @@ contract IntentsTellerTest is Test {
             1.005e4,
             positionManager,
             universalRouter,
-            address(0)
-        );
+            address(0),
+            500,
+            10
+        ));
 
         intentsTeller = new IntentsTeller(address(this), address(boringVault), address(manager), "Intents Teller", "2", 86400 * 7);
 
