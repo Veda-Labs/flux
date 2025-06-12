@@ -526,7 +526,7 @@ contract UniswapV4FluxManager is FluxManager {
             address(token0) == address(0) ? address(boringVault).balance : token0.balanceOf(address(boringVault));
         uint256 token1Starting = token1.balanceOf(address(boringVault));
 
-        boringVault.manage(aggregator, swapData, token0Or1 ? amount : 0);
+        boringVault.manage(aggregator, swapData, token0Or1 && address(token0) == address(0) ? amount : 0);
 
         uint256 token0Ending =
             address(token0) == address(0) ? address(boringVault).balance : token0.balanceOf(address(boringVault));
@@ -542,7 +542,6 @@ contract UniswapV4FluxManager is FluxManager {
         }
     }
 
-    // TODO consider if there is a case for this to have a variable amount
     function _wrapAllNative() internal {
         if (address(boringVault).balance != 0) {
             boringVault.manage(

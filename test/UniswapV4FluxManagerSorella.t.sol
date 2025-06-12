@@ -104,7 +104,7 @@ contract UniswapV4FluxManagerTestSorella is Test {
         uint256 ethAmount = 1e18;
         uint256 usdcAmount = 2530e6;
         deal(nativeWrapper, address(boringVault), ethAmount);
-        deal(address(token1), address(boringVault), usdcAmount);
+        deal(address(token0), address(boringVault), usdcAmount);
 
         // (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee) =
         (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
@@ -134,15 +134,15 @@ contract UniswapV4FluxManagerTestSorella is Test {
         manager.rebalance(price, actions);
 
         (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
-        assertApproxEqRel(token0Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
-        assertApproxEqRel(token1Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
+        assertApproxEqRel(token1Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
+        assertApproxEqRel(token0Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
     }
 
     function testBurning(uint256 ethAmount, uint256 usdcAmount) external {
         ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
         usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
         deal(nativeWrapper, address(boringVault), ethAmount);
-        deal(address(token1), address(boringVault), usdcAmount);
+        deal(address(token0), address(boringVault), usdcAmount);
 
         (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
 
@@ -169,15 +169,15 @@ contract UniswapV4FluxManagerTestSorella is Test {
         manager.rebalance(price, actions);
 
         (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
-        assertApproxEqRel(token0Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
-        assertApproxEqRel(token1Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
+        assertApproxEqRel(token1Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
+        assertApproxEqRel(token0Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
     }
 
     function testLiquidityManagement(uint256 ethAmount, uint256 usdcAmount) external {
         ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
         usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
         deal(nativeWrapper, address(boringVault), 2 * ethAmount);
-        deal(address(token1), address(boringVault), 2 * usdcAmount);
+        deal(address(token0), address(boringVault), 2 * usdcAmount);
 
         (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
 
@@ -214,9 +214,9 @@ contract UniswapV4FluxManagerTestSorella is Test {
         manager.rebalance(price, actions);
 
         (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
-        assertApproxEqRel(token0Balance, 2 * ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
+        assertApproxEqRel(token1Balance, 2 * ethAmount, 0.0001e18, "token1Balance should equate to original ethAmount");
         assertApproxEqRel(
-            token1Balance, 2 * usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount"
+            token0Balance, 2 * usdcAmount, 0.0001e18, "token0Balance should equate to original usdcAmount"
         );
     }
 
@@ -244,40 +244,42 @@ contract UniswapV4FluxManagerTestSorella is Test {
         uint256 ethAmount = 1e18;
         uint256 usdcAmount = 10_000e6;
         deal(nativeWrapper, address(boringVault), ethAmount);
-        deal(address(token1), address(boringVault), usdcAmount);
+        deal(address(token0), address(boringVault), usdcAmount);
 
-        uint256 price = 3.952e14;
+        uint256 price = 3.952e14; // ETH per USDC in ETH decimals
+        uint256 usdPerEth = 2530e6; // USDC per ETH in USDC decimals
         UniswapV4FluxManager.Action[] memory actions;
         bytes memory swapData;
 
-        uint256 expectedAmountOut = price.mulDivDown(ethAmount / 2, 1e18);
+        uint256 expectedAmountOut = usdPerEth.mulDivDown(ethAmount / 2, 1e18);
+        console.log("expectedAmountOut", expectedAmountOut);
 
         // Happy path
-        swapData = abi.encodeWithSelector(this.swap.selector, token0, ethAmount, token1, expectedAmountOut);
+        swapData = abi.encodeWithSelector(this.swap.selector, token1, ethAmount / 2, token0, expectedAmountOut);
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
-        actions[0].data = abi.encode(address(this), ethAmount / 2, true, expectedAmountOut, swapData);
+        actions[0].data = abi.encode(address(this), ethAmount / 2, false, expectedAmountOut, swapData);
         manager.rebalance(price, actions);
 
         // Failure not meeting min amount out
         swapData = abi.encodeWithSelector(
-            this.badSwapNotSpendingMeetingMinAmountOut.selector, token0, ethAmount, token1, expectedAmountOut
+            this.badSwapNotSpendingMeetingMinAmountOut.selector, token1, ethAmount / 2, token0, expectedAmountOut
         );
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
-        actions[0].data = abi.encode(address(this), ethAmount / 2, true, expectedAmountOut, swapData);
+        actions[0].data = abi.encode(address(this), ethAmount / 2, false, expectedAmountOut, swapData);
         vm.expectRevert(
-            bytes(abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__SwapAggregatorBadToken1.selector))
+            bytes(abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__SwapAggregatorBadToken0.selector))
         );
         manager.rebalance(price, actions);
 
         // Failure minting shares during swap.
         swapData = abi.encodeWithSelector(
-            this.badSwapNotSpendingMintingShares.selector, token0, ethAmount, token1, expectedAmountOut
+            this.badSwapNotSpendingMintingShares.selector, token1, ethAmount / 2, token0, expectedAmountOut
         );
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
-        actions[0].data = abi.encode(address(this), ethAmount / 2, true, expectedAmountOut, swapData);
+        actions[0].data = abi.encode(address(this), ethAmount / 2, false, expectedAmountOut, swapData);
         vm.expectRevert(
             bytes(
                 abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__RebalanceChangedTotalSupply.selector)
@@ -286,12 +288,12 @@ contract UniswapV4FluxManagerTestSorella is Test {
         manager.rebalance(price, actions);
 
         // Failure not spending all approval
-        swapData = abi.encodeWithSelector(this.badSwapNotSpendingAllApproval.selector, token1, usdcAmount, token0, 1);
+        swapData = abi.encodeWithSelector(this.badSwapNotSpendingAllApproval.selector, token0, usdcAmount, token1, 1);
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_WITH_AGGREGATOR;
-        actions[0].data = abi.encode(address(this), usdcAmount, false, 1, swapData);
+        actions[0].data = abi.encode(address(this), usdcAmount, true, 1, swapData);
         vm.expectRevert(
-            bytes(abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__SwapAggregatorBadToken1.selector))
+            bytes(abi.encodeWithSelector(UniswapV4FluxManager.UniswapV4FluxManager__SwapAggregatorBadToken0.selector))
         );
         manager.rebalance(price, actions);
     }
@@ -300,19 +302,20 @@ contract UniswapV4FluxManagerTestSorella is Test {
 
     function testGetRate() external view {
         uint256 exchangeRate = 3.952e14;
-        // BASE IN TOKEN 1 WETH // TODO MAKE SURE THIS IS CORRECT
+        // BASE IN TOKEN 1 WETH
         uint256 rateIn0 = manager.getRate(exchangeRate, true);
         assertEq(rateIn0, 2530364372, "Zero share rate should be 1/exRate in USDC decimals");
         uint256 rateIn1 = manager.getRate(exchangeRate, false);
         assertEq(rateIn1, 1e18, "Zero share rate should be 1 in WETH decimals");
     }
 
+    // TODO: find alternative way to test when swaps cannot occur
     function testFees() external {
         // deposit huge amounts in order to be the primary LP and fee accruer
         uint256 ethAmount = 1e18 * 1_000_000;
-        uint256 usdcAmount = 2539293520 * 1_000_000;
+        uint256 usdcAmount = 2530 * 1e6 * 1_000_000;
         deal(nativeWrapper, address(boringVault), 2 * ethAmount);
-        deal(address(token1), address(boringVault), 2 * usdcAmount);
+        deal(address(token0), address(boringVault), 2 * usdcAmount);
 
         (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
 
