@@ -14,6 +14,7 @@ import {LiquidityAmounts} from "@uni-v3-p/libraries/LiquidityAmounts.sol";
 import {TickMath} from "@uni-v3-c/libraries/TickMath.sol";
 import {ChainlinkDatum} from "src/datums/ChainlinkDatum.sol";
 import {FixedPointMathLib} from "@solmate/src/utils/FixedPointMathLib.sol";
+import {MockDatum} from "./mocks/MockDatum.sol";
 
 contract UniswapV4FluxManagerTestSorella is Test {
     using Address for address;
@@ -21,7 +22,7 @@ contract UniswapV4FluxManagerTestSorella is Test {
 
     RolesAuthority internal rolesAuthority;
     BoringVault internal boringVault;
-    ChainlinkDatum internal datum;
+    MockDatum internal datum;
     UniswapV4FluxManager internal manager;
     address internal positionManager = 0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4;
     address internal universalRouter = 0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b;
@@ -54,7 +55,11 @@ contract UniswapV4FluxManagerTestSorella is Test {
 
         rolesAuthority.setUserRole(0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9, 1, true);
 
-        datum = new ChainlinkDatum(ETH_USD_ORACLE, 1 days, true);
+        datum = new MockDatum(
+            5640.28e8,
+            8,
+            true
+        );
 
         manager = new UniswapV4FluxManager(
             UniswapV4FluxManager.ConstructorArgs(
@@ -76,7 +81,7 @@ contract UniswapV4FluxManagerTestSorella is Test {
 
         manager.setPayout(payout);
 
-        uint256 price = 3.952e14; // WETH per USDC in WETH decimals
+        uint256 price = 0.000177296066e18; // WETH per USDC in WETH decimals
 
         // Give required approvals.
         UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](6);
@@ -99,22 +104,20 @@ contract UniswapV4FluxManagerTestSorella is Test {
     }
 
     function testMinting() external {
-        // DUE TO IMBALANCE POOL RELATIVE TO THE ORACLE, THE BALANCES DEVIATE FROM THE ORIGINAL AMOUNTS
-        manager.setRebalanceDeviations(0.94e4, 1.06e4);
         uint256 ethAmount = 1e16;
-        uint256 usdcAmount = 2530e4;
+        uint256 usdcAmount = 5640.28e4;
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token0), address(boringVault), usdcAmount);
 
         // (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee) =
         (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
         // console.log("=== Pool Slot0 Data ===");
-        // console.log("sqrtPriceX96:", sqrtPriceX96);
+        console.log("sqrtPriceX96:", sqrtPriceX96);
         // console.log("tick:", tick);
         // console.log("protocolFee:", protocolFee);
         // console.log("lpFee:", lpFee);
 
-        uint256 price = 3.952e14;
+        uint256 price = 0.000177296066e18;
 
         int24 tickLower = -887_220;
         int24 tickUpper = 887_220;
@@ -132,15 +135,9 @@ contract UniswapV4FluxManagerTestSorella is Test {
         actions[0].data = abi.encode(tickLower, tickUpper, liquidity, usdcAmount, ethAmount, block.timestamp);
         manager.rebalance(price, actions);
 
-        // (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
-        // assertApproxEqRel(token1Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
-        // assertApproxEqRel(token0Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
-        
-        // DUE TO IMBALANCE POOL RELATIVE TO THE ORACLE, THE BALANCES DEVIATE FROM THE ORIGINAL AMOUNTS
-        uint256 netBalanceInToken1 = manager.totalAssets(price, false);
-        uint256 netBalanceInToken0 = manager.totalAssets(price, true);
-        assertApproxEqRel(netBalanceInToken1, ethAmount * 2, 0.06e18, "netBalanceInToken1 should equate to original ethAmount");
-        assertApproxEqRel(netBalanceInToken0, usdcAmount * 2, 0.06e18, "netBalanceInToken0 should equate to original usdcAmount");
+        (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
+        assertApproxEqRel(token1Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
+        assertApproxEqRel(token0Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
     }
 
     function testBurning(uint256 ethAmount, uint256 usdcAmount) external {
@@ -149,12 +146,9 @@ contract UniswapV4FluxManagerTestSorella is Test {
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token0), address(boringVault), usdcAmount);
 
-        // DUE TO IMBALANCE POOL RELATIVE TO THE ORACLE, THE BALANCES DEVIATE FROM THE ORIGINAL AMOUNTS
-        manager.setRebalanceDeviations(0.91e4, 1.09e4);
-
         (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
 
-        uint256 price = 3.952e14;
+        uint256 price = 0.000177296066e18;
 
         int24 tickLower = -887_220;
         int24 tickUpper = 887_220;
@@ -176,8 +170,6 @@ contract UniswapV4FluxManagerTestSorella is Test {
         actions[0].data = abi.encode(manager.trackedPositions(0), 0, 0, block.timestamp);
         manager.rebalance(price, actions);
 
-        // Despite temporary deviation during rebalance, the balances should be back to original amounts after mint + burn
-
         (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
         assertApproxEqRel(token1Balance, ethAmount, 0.0001e18, "token0Balance should equate to original ethAmount");
         assertApproxEqRel(token0Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
@@ -189,12 +181,9 @@ contract UniswapV4FluxManagerTestSorella is Test {
         deal(nativeWrapper, address(boringVault), 2 * ethAmount);
         deal(address(token0), address(boringVault), 2 * usdcAmount);
 
-        // DUE TO IMBALANCE POOL RELATIVE TO THE ORACLE, THE BALANCES DEVIATE FROM THE ORIGINAL AMOUNTS
-        manager.setRebalanceDeviations(0.91e4, 1.09e4);
-
         (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
 
-        uint256 price = 3.952e14;
+        uint256 price = 0.000177296066e18;
 
         int24 tickLower = -887_220;
         int24 tickUpper = 887_220;
@@ -226,10 +215,9 @@ contract UniswapV4FluxManagerTestSorella is Test {
         actions[0].data = abi.encode(manager.trackedPositions(0), block.timestamp);
         manager.rebalance(price, actions);
 
-        // DUE TO IMBALANCE POOL RELATIVE TO THE ORACLE, THE BALANCES DEVIATE FROM THE ORIGINAL AMOUNTS
         (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
-        assertApproxEqRel(token1Balance, 2 * ethAmount, 0.11e18, "token0Balance should equate to original ethAmount");
-        assertApproxEqRel(token0Balance, 2 * usdcAmount, 0.11e18, "token1Balance should equate to original usdcAmount");
+        assertApproxEqRel(token1Balance, 2 * ethAmount, 0.001e18, "token0Balance should equate to original ethAmount");
+        assertApproxEqRel(token0Balance, 2 * usdcAmount, 0.001e18, "token1Balance should equate to original usdcAmount");
     }
 
     function testSwapping() external {
@@ -238,7 +226,7 @@ contract UniswapV4FluxManagerTestSorella is Test {
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
-        uint256 price = 3.952e14;
+        uint256 price = 0.000177296066e18;
 
         UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](2);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN0_FOR_TOKEN1_IN_POOL;
@@ -258,8 +246,8 @@ contract UniswapV4FluxManagerTestSorella is Test {
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token0), address(boringVault), usdcAmount);
 
-        uint256 price = 3.952e14; // ETH per USDC in ETH decimals
-        uint256 usdPerEth = 2530e6; // USDC per ETH in USDC decimals
+        uint256 price = 0.000177296066e18; // ETH per USDC in ETH decimals
+        uint256 usdPerEth = 5640.28e6; // USDC per ETH in USDC decimals
         UniswapV4FluxManager.Action[] memory actions;
         bytes memory swapData;
 
@@ -313,57 +301,13 @@ contract UniswapV4FluxManagerTestSorella is Test {
     // TODO test accounting with multiple different positions.
 
     function testGetRate() external view {
-        uint256 exchangeRate = 3.952e14;
+        uint256 exchangeRate = 0.000177296066e18;
         // BASE IN TOKEN 1 WETH
         uint256 rateIn0 = manager.getRate(exchangeRate, true);
-        assertEq(rateIn0, 2530364372, "Zero share rate should be 1/exRate in USDC decimals");
+        assertApproxEqRel(rateIn0, 5640.28e6, 0.0001e18, "Zero share rate should be 1/exRate in USDC decimals");
         uint256 rateIn1 = manager.getRate(exchangeRate, false);
         assertEq(rateIn1, 1e18, "Zero share rate should be 1 in WETH decimals");
     }
-
-    // TODO: find alternative way to test when swaps cannot occur
-    // function testFees() external {
-    //     // deposit huge amounts in order to be the primary LP and fee accruer
-    //     uint256 ethAmount = 1e18 * 1_000_000;
-    //     uint256 usdcAmount = 2530 * 1e6 * 1_000_000;
-    //     deal(nativeWrapper, address(boringVault), 2 * ethAmount);
-    //     deal(address(token0), address(boringVault), 2 * usdcAmount);
-
-    //     (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
-
-    //     uint256 price = 3.952e14;
-
-    //     int24 tickLower = -887220;
-    //     int24 tickUpper = 887_220;
-    //     uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
-    //         sqrtPriceX96,
-    //         TickMath.getSqrtRatioAtTick(tickLower),
-    //         TickMath.getSqrtRatioAtTick(tickUpper),
-    //         ethAmount,
-    //         usdcAmount
-    //     );
-
-    //     UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
-    //     actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
-    //     actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
-    //     manager.rebalance(price, actions);
-
-    //     deal(address(token1), address(boringVault), 100e6);
-    //     actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
-    //     actions[0].data = abi.encode(100e6, 0, block.timestamp, bytes(""));
-    //     manager.rebalance(price, actions);
-
-    //     actions = new UniswapV4FluxManager.Action[](1);
-    //     actions[0].kind = UniswapV4FluxManager.ActionKind.COLLECT_FEES;
-    //     actions[0].data = abi.encode(manager.trackedPositions(0), block.timestamp);
-    //     manager.rebalance(price, actions);
-
-    //     uint256 expectedFeeToVaultInUsdc = 5e4;
-
-    //     manager.claimFees(false);
-
-    //     assertApproxEqRel(token1.balanceOf(payout), expectedFeeToVaultInUsdc * manager.performanceFee() / 1e4, 1e16, "Claimed Fee should equal expected");
-    // }
 
     // ========================================= HELPER FUNCTIONS =========================================
 
