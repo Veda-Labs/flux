@@ -555,7 +555,7 @@ contract UniswapV4FluxManager is FluxManager {
     }
 
     function _wrapAllNative() internal {
-        if (address(boringVault).balance != 0) {
+        if (address(boringVault).balance > 0) {
             boringVault.manage(
                 nativeWrapper, abi.encodeWithSelector(WETH.deposit.selector), address(boringVault).balance
             );
@@ -563,7 +563,7 @@ contract UniswapV4FluxManager is FluxManager {
     }
 
     function _unwrapAllNative() internal {
-        if (ERC20(nativeWrapper).balanceOf(address(boringVault)) != 0) {
+        if (ERC20(nativeWrapper).balanceOf(address(boringVault)) > 0) {
             // Unwrap all native tokens to the boring vault.
             boringVault.manage(
                 nativeWrapper,

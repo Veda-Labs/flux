@@ -9,8 +9,6 @@ import {IDatum} from "src/interfaces/IDatum.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {WETH} from "@solmate/src/tokens/WETH.sol";
 
-import {console} from "@forge-std/Test.sol";
-
 /// @notice Manager used for Flux Boring Vaults
 ///
 /// @dev
@@ -18,10 +16,6 @@ import {console} from "@forge-std/Test.sol";
 /// and for abstratcing the total assets calculation down to a flux function.
 abstract contract FluxManager is Auth {
     using FixedPointMathLib for uint256;
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                         ENUMS                              */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CONSTANTS                           */
@@ -248,7 +242,6 @@ abstract contract FluxManager is Auth {
             address token = token0Or1 ? address(token0) : address(token1);
             pendingFee = 0;
             if (address(token) == address(0)) {
-                // TODO: Confirm native/wrapped handling
                 // Transfer it.
                 boringVault.manage(nativeWrapper, abi.encodeWithSelector(ERC20.transfer.selector, payout, pending), 0);
             } else {

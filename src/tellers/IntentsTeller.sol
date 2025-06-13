@@ -30,6 +30,18 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         uint16 sharePremium;
     }
 
+    /**
+     * @notice Data structure for deposit and withdrawal actions
+     * @param isWithdrawal Whether this is a withdrawal action (true) or deposit action (false)
+     * @param user The address of the user performing the action
+     * @param to The recipient address for the action
+     * @param asset The ERC20 token being deposited or withdrawn
+     * @param amountIn The amount of shares/tokens being deposited or withdrawn
+     * @param minimumOut The minimum amount of shares/tokens expected from the action
+     * @param rate The exchange rate to use for the action, not included in the signed message
+     * @param deadline The timestamp after which this action is no longer valid
+     * @param sig The signature authorizing this action
+     */
     struct ActionData {
         bool isWithdrawal;
         address user;
@@ -54,7 +66,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         bool denyTo;
         bool denyOperator;
         bool permissionedOperator;
-        uint256 shareUnlockTime;
+        uint64 shareUnlockTime;
     }
 
     // ========================================= CONSTANTS =========================================
@@ -71,21 +83,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     uint16 internal constant MAX_SHARE_PREMIUM = 1_000;
 
     // ========================================= STATE =========================================
-
-    /**
-     * @notice The Flux Manager associated with this Teller and BoringVault.
-     */
-    FluxManager public fluxManager;
-
-    /**
-     * @notice The token0 associated with fluxManager
-     */
-    ERC20 public immutable token0;
-
-    /**
-     * @notice The token1 associated with fluxManager
-     */
-    ERC20 public immutable token1;
 
     /**
      * @notice Mapping ERC20s to their assetData.
@@ -196,6 +193,21 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      * @notice One share of the BoringVault.
      */
     uint256 internal immutable ONE_SHARE;
+
+    /**
+     * @notice The Flux Manager associated with this Teller and BoringVault.
+     */
+    FluxManager public immutable fluxManager;
+
+    /**
+     * @notice The token0 associated with fluxManager
+     */
+    ERC20 public immutable token0;
+
+    /**
+     * @notice The token1 associated with fluxManager
+     */
+    ERC20 public immutable token1;
 
     constructor(
         address _owner,
@@ -438,7 +450,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
             revert IntentsTeller__BadDepositHash();
         }
 
-        // Delete hash to prevent refund gas.
         delete publicDepositHistory[nonce];
 
         // Burn shares and refund assets to receiver.
@@ -454,7 +465,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      * @dev Callable by SOLVER_ROLE.
      * @dev Does NOT support native deposits.
      */
-    function deposit(ActionData memory depositData, bool enforceShareLock)
+    function deposit(ActionData calldata depositData, bool enforceShareLock)
         external
         requiresAuth
         nonReentrant
@@ -470,17 +481,19 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      * @dev Callable by SOLVER_ROLE.
      * @dev Does NOT support native withdrawals.
      */
-    function withdraw(ActionData memory withdrawData) external requiresAuth returns (uint256 assetsOut) {
+    function withdraw(ActionData calldata withdrawData) external requiresAuth returns (uint256 assetsOut) {
         if (isPaused) revert IntentsTeller__Paused();
 
         assetsOut = _erc20Withdraw(withdrawData);
     }
 
-    function bulkActions(ActionData[] memory actionData, bool[] memory enforceShareLock)
+    function bulkActions(ActionData[] calldata actionData, bool[] memory enforceShareLock)
         external
         requiresAuth
         nonReentrant
     {
+        if (isPaused) revert IntentsTeller__Paused();
+
         for (uint256 i = 0; i < actionData.length; i++) {
             if (actionData[i].isWithdrawal) {
                 _erc20Withdraw(actionData[i]);
@@ -496,7 +509,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      * @notice Allows users to cancel a pending signature.
      * @dev Callable by the user who signed the message.
      */
-    function cancelSignature(ActionData memory actionData) external requiresAuth {
+    function cancelSignature(ActionData calldata actionData) external requiresAuth {
         // revert if the msg.sender is not the signer so that users can only cancel their own signatures
         if (actionData.user != msg.sender) {
             revert IntentsTeller__InvalidSignature();
@@ -509,7 +522,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     /**
      * @notice Implements a common ERC20 deposit into BoringVault.
      */
-    function _erc20Deposit(ActionData memory depositData, bool enforceShareLock) internal returns (uint256 shares) {
+    function _erc20Deposit(ActionData calldata depositData, bool enforceShareLock) internal returns (uint256 shares) {
         if (depositData.amountIn == 0) {
             revert IntentsTeller__ZeroAssets();
         }
@@ -537,7 +550,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         }
     }
 
-    function _erc20Withdraw(ActionData memory withdrawData) internal returns (uint256 assetsOut) {
+    function _erc20Withdraw(ActionData calldata withdrawData) internal returns (uint256 assetsOut) {
         Asset memory asset = assetData[withdrawData.asset];
         if (!asset.allowWithdraws) {
             revert IntentsTeller__AssetNotSupported();
@@ -551,7 +564,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
 
         assetsOut = withdrawData.amountIn.mulDivDown(
             fluxManager.getRateSafe(withdrawData.rate, withdrawData.asset == token0), ONE_SHARE
-        ); // check rate direction
+        );
 
         if (assetsOut < withdrawData.minimumOut) {
             revert IntentsTeller__MinimumAssetsNotMet();
@@ -585,7 +598,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         uint256 nonce = ++depositNonce;
         // Only set share unlock time and history if share lock period is greater than 0.
         if (currentShareLockPeriod > 0) {
-            beforeTransferData[user].shareUnlockTime = block.timestamp + currentShareLockPeriod;
+            beforeTransferData[user].shareUnlockTime = uint64(block.timestamp + currentShareLockPeriod);
             publicDepositHistory[nonce] = keccak256(
                 abi.encode(user, depositAsset, depositAmount, shares, block.timestamp, currentShareLockPeriod)
             );
@@ -593,7 +606,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         emit Deposit(nonce, user, address(depositAsset), depositAmount, shares, block.timestamp, currentShareLockPeriod);
     }
 
-    function _verifySignedMessage(ActionData memory actionData) internal {
+    function _verifySignedMessage(ActionData calldata actionData) internal {
         // Recreate the signed message and verify the signature
         // Signature does not include rate as rate is specified by executor at execution time
         bytes32 digest = _hashTypedDataV4(
