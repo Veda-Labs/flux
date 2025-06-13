@@ -88,23 +88,25 @@ contract IntentsTellerTest is Test {
 
         manager = new UniswapV4FluxManager(
             UniswapV4FluxManager.ConstructorArgs(
-            address(this),
-            address(boringVault),
-            address(token0),
-            address(token1),
-            false,
-            nativeWrapper,
-            address(datum),
-            0.995e4,
-            1.005e4,
-            positionManager,
-            universalRouter,
-            address(0),
-            500,
-            10
-        ));
+                address(this),
+                address(boringVault),
+                address(token0),
+                address(token1),
+                false,
+                nativeWrapper,
+                address(datum),
+                0.995e4,
+                1.005e4,
+                positionManager,
+                universalRouter,
+                address(0),
+                500,
+                10
+            )
+        );
 
-        intentsTeller = new IntentsTeller(address(this), address(boringVault), address(manager), "Intents Teller", "2", 86400 * 7);
+        intentsTeller =
+            new IntentsTeller(address(this), address(boringVault), address(manager), "Intents Teller", "2", 86400 * 7);
 
         intentsTeller.setAuthority(rolesAuthority);
 
@@ -121,7 +123,6 @@ contract IntentsTellerTest is Test {
 
         // SET UP ROLES FOR TELLER ON VAULT
         rolesAuthority.setUserRole(address(intentsTeller), 2, true);
-
 
         // Make Signature Cancellation Public
         rolesAuthority.setPublicCapability(address(intentsTeller), IntentsTeller.cancelSignature.selector, true);
@@ -523,7 +524,6 @@ contract IntentsTellerTest is Test {
             )
         );
         boringVault.transfer(address(this), 3e7);
-
     }
 
     function testShareLockPeriod() external {
@@ -737,7 +737,6 @@ contract IntentsTellerTest is Test {
 
         assertEq(boringVault.balanceOf(testUser0), amount);
 
-
         uint256 amount1 = 1e18;
         // Now Deposit token0 with user 1
         deal(address(token0), testUser1, amount1);
@@ -830,7 +829,6 @@ contract IntentsTellerTest is Test {
         );
         assertEq(boringVault.balanceOf(testUser1), 0);
         assertApproxEqRel(token0.balanceOf(testUser1), amount1, 1e12); //0.0001% error tolerance
-
     }
 
     function testBulkActions() external {
@@ -1728,10 +1726,19 @@ contract IntentsTellerTest is Test {
     }
 
     function _generateSignature(SigData memory sigData) internal view returns (bytes memory sig) {
-        bytes32 TYPE_HASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+        bytes32 TYPE_HASH =
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
         // Get the domain separator from the contract
-        bytes32 domainSeparator = keccak256(abi.encode(TYPE_HASH, keccak256(bytes("Intents Teller")), keccak256(bytes("2")), block.chainid, address(intentsTeller)));
-        
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                TYPE_HASH,
+                keccak256(bytes("Intents Teller")),
+                keccak256(bytes("2")),
+                block.chainid,
+                address(intentsTeller)
+            )
+        );
+
         bytes32 hash = keccak256(
             abi.encode(
                 sigData.teller,
@@ -1751,5 +1758,4 @@ contract IntentsTellerTest is Test {
     // function _hashTypedDataV4(bytes32 structHash) internal view virtual returns (bytes32) {
     //     return MessageHashUtils.toTypedDataHash(_domainSeparatorV4(), structHash);
     // }
-
 }

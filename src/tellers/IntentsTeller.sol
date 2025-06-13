@@ -197,10 +197,14 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      */
     uint256 internal immutable ONE_SHARE;
 
-    constructor(address _owner, address _vault, address _fluxManager, string memory _name, string memory _version, uint64 _maxDeadlinePeriod)
-        Auth(_owner, Authority(address(0)))
-        EIP712(_name, _version)
-    {
+    constructor(
+        address _owner,
+        address _vault,
+        address _fluxManager,
+        string memory _name,
+        string memory _version,
+        uint64 _maxDeadlinePeriod
+    ) Auth(_owner, Authority(address(0))) EIP712(_name, _version) {
         vault = BoringVault(payable(_vault));
         ONE_SHARE = 10 ** vault.decimals();
         fluxManager = FluxManager(_fluxManager);
@@ -389,7 +393,11 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      *         if this behavior is not desired then a share lock period of >=1 should be used.
      */
     function beforeTransfer(address from, address to, address operator) public view virtual {
-        if (beforeTransferData[from].denyFrom || beforeTransferData[to].denyTo || beforeTransferData[operator].denyOperator || (permissionedTransfers && !beforeTransferData[operator].permissionedOperator)) {
+        if (
+            beforeTransferData[from].denyFrom || beforeTransferData[to].denyTo
+                || beforeTransferData[operator].denyOperator
+                || (permissionedTransfers && !beforeTransferData[operator].permissionedOperator)
+        ) {
             revert IntentsTeller__TransferDenied(from, to, operator);
         }
         if (beforeTransferData[from].shareUnlockTime > block.timestamp) {
@@ -446,7 +454,12 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      * @dev Callable by SOLVER_ROLE.
      * @dev Does NOT support native deposits.
      */
-    function deposit(ActionData memory depositData, bool enforceShareLock) external requiresAuth nonReentrant returns (uint256 shares) {
+    function deposit(ActionData memory depositData, bool enforceShareLock)
+        external
+        requiresAuth
+        nonReentrant
+        returns (uint256 shares)
+    {
         if (isPaused) revert IntentsTeller__Paused();
 
         shares = _erc20Deposit(depositData, enforceShareLock);
@@ -463,7 +476,11 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         assetsOut = _erc20Withdraw(withdrawData);
     }
 
-    function bulkActions(ActionData[] memory actionData, bool[] memory enforceShareLock) external requiresAuth nonReentrant {
+    function bulkActions(ActionData[] memory actionData, bool[] memory enforceShareLock)
+        external
+        requiresAuth
+        nonReentrant
+    {
         for (uint256 i = 0; i < actionData.length; i++) {
             if (actionData[i].isWithdrawal) {
                 _erc20Withdraw(actionData[i]);
@@ -496,21 +513,23 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         if (depositData.amountIn == 0) {
             revert IntentsTeller__ZeroAssets();
         }
-        
+
         _verifySignedMessage(depositData);
 
         fluxManager.refreshInternalFluxAccounting();
 
-        shares = depositData.amountIn.mulDivDown(ONE_SHARE, fluxManager.getRateSafe(depositData.rate, depositData.asset == token0));
+        shares = depositData.amountIn.mulDivDown(
+            ONE_SHARE, fluxManager.getRateSafe(depositData.rate, depositData.asset == token0)
+        );
 
         Asset memory asset = _beforeDeposit(depositData.asset);
         shares = asset.sharePremium > 0 ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4) : shares;
         if (shares < depositData.minimumOut) {
             revert IntentsTeller__MinimumMintNotMet();
         }
-        
+
         vault.enter(depositData.user, depositData.asset, depositData.amountIn, depositData.to, shares);
-        
+
         if (enforceShareLock) {
             _afterPublicDeposit(depositData.user, depositData.asset, depositData.amountIn, shares, shareLockPeriod);
         } else {
@@ -530,7 +549,9 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
 
         fluxManager.refreshInternalFluxAccounting();
 
-        assetsOut = withdrawData.amountIn.mulDivDown(fluxManager.getRateSafe(withdrawData.rate, withdrawData.asset == token0), ONE_SHARE); // check rate direction
+        assetsOut = withdrawData.amountIn.mulDivDown(
+            fluxManager.getRateSafe(withdrawData.rate, withdrawData.asset == token0), ONE_SHARE
+        ); // check rate direction
 
         if (assetsOut < withdrawData.minimumOut) {
             revert IntentsTeller__MinimumAssetsNotMet();
@@ -575,17 +596,19 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     function _verifySignedMessage(ActionData memory actionData) internal {
         // Recreate the signed message and verify the signature
         // Signature does not include rate as rate is specified by executor at execution time
-        bytes32 digest = _hashTypedDataV4(keccak256(
-            abi.encode(
-                address(this), // teller
-                actionData.to, // receiver
-                actionData.asset, // asset
-                actionData.isWithdrawal, // type
-                actionData.amountIn, // amount
-                actionData.minimumOut, // minimumOut
-                actionData.deadline // deadline
+        bytes32 digest = _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    address(this), // teller
+                    actionData.to, // receiver
+                    actionData.asset, // asset
+                    actionData.isWithdrawal, // type
+                    actionData.amountIn, // amount
+                    actionData.minimumOut, // minimumOut
+                    actionData.deadline // deadline
+                )
             )
-        ));
+        );
 
         address signer = ECDSA.recover(digest, actionData.sig);
 

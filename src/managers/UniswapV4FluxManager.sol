@@ -129,9 +129,7 @@ contract UniswapV4FluxManager is FluxManager {
     IPositionManager internal immutable positionManager;
     address internal immutable universalRouter;
 
-    constructor(
-        ConstructorArgs memory _args
-    )
+    constructor(ConstructorArgs memory _args)
         FluxManager(
             _args.owner,
             _args.boringVault,
@@ -439,7 +437,12 @@ contract UniswapV4FluxManager is FluxManager {
         _modifyLiquidities(actions, params, deadline, 0);
     }
 
-    function _swapToken0ForToken1InPool(uint128 amount0In, uint128 minAmount1Out, uint256 deadline, bytes memory hookData) internal {
+    function _swapToken0ForToken1InPool(
+        uint128 amount0In,
+        uint128 minAmount1Out,
+        uint256 deadline,
+        bytes memory hookData
+    ) internal {
         bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));
         // Encode V4Router actions
         bytes memory actions =
@@ -473,7 +476,12 @@ contract UniswapV4FluxManager is FluxManager {
         boringVault.manage(universalRouter, swapData, address(token0) == address(0) ? amount0In : 0);
     }
 
-    function _swapToken1ForToken0InPool(uint128 amount1In, uint128 minAmount0Out, uint256 deadline, bytes memory hookData) internal {
+    function _swapToken1ForToken0InPool(
+        uint128 amount1In,
+        uint128 minAmount0Out,
+        uint256 deadline,
+        bytes memory hookData
+    ) internal {
         bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));
         // Encode V4Router actions
         bytes memory actions =
@@ -507,9 +515,13 @@ contract UniswapV4FluxManager is FluxManager {
         boringVault.manage(universalRouter, swapData, 0);
     }
 
-    function _swapWithAggregator(address aggregator, uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData)
-        internal
-    {
+    function _swapWithAggregator(
+        address aggregator,
+        uint256 amount,
+        bool token0Or1,
+        uint256 minAmountOut,
+        bytes memory swapData
+    ) internal {
         // check that the aggregator is a valid aggregator
         if (aggregators[aggregator] == false) revert UniswapV4FluxManager__InvalidAggregator();
         bytes memory approveCalldata = abi.encodeWithSelector(ERC20.approve.selector, aggregator, amount);

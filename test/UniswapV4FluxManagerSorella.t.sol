@@ -55,29 +55,26 @@ contract UniswapV4FluxManagerTestSorella is Test {
 
         rolesAuthority.setUserRole(0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9, 1, true);
 
-        datum = new MockDatum(
-            5640.28e8,
-            8,
-            true
-        );
+        datum = new MockDatum(5640.28e8, 8, true);
 
         manager = new UniswapV4FluxManager(
             UniswapV4FluxManager.ConstructorArgs(
-            address(this),
-            address(boringVault),
-            address(token0),
-            address(token1),
-            false,
-            nativeWrapper,
-            address(datum),
-            0.995e4,
-            1.005e4,
-            positionManager,
-            universalRouter,
-            hook,
-            uint24(0x800000), //dynamic fee
-            60
-        ));
+                address(this),
+                address(boringVault),
+                address(token0),
+                address(token1),
+                false,
+                nativeWrapper,
+                address(datum),
+                0.995e4,
+                1.005e4,
+                positionManager,
+                universalRouter,
+                hook,
+                uint24(0x800000), //dynamic fee
+                60
+            )
+        );
 
         manager.setPayout(payout);
 
@@ -235,7 +232,9 @@ contract UniswapV4FluxManagerTestSorella is Test {
         actions[1].data = abi.encode(usdcAmount / 2, 0, block.timestamp, bytes(""));
         // reverts because Sorella hook locks the pool when the swap does not have the special unlock data provided by their off chain system
         // for the swap via their on chain executor
-        vm.expectRevert(abi.encode("WrappedError(0x9051085355BA7e36177e0a1c4082cb88C270ba90, 0x575e24b4, 0x1e8107a0, 0xa9e35b2f)"));
+        vm.expectRevert(
+            abi.encode("WrappedError(0x9051085355BA7e36177e0a1c4082cb88C270ba90, 0x575e24b4, 0x1e8107a0, 0xa9e35b2f)")
+        );
         manager.rebalance(price, actions);
     }
 

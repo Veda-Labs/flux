@@ -58,21 +58,22 @@ contract UniswapV4FluxManagerTest is Test {
 
         manager = new UniswapV4FluxManager(
             UniswapV4FluxManager.ConstructorArgs(
-            address(this),
-            address(boringVault),
-            address(token0),
-            address(token1),
-            true,
-            nativeWrapper,
-            address(datum),
-            0.995e4,
-            1.005e4,
-            positionManager,
-            universalRouter,
-            hook,
-            500,
-            10
-        ));
+                address(this),
+                address(boringVault),
+                address(token0),
+                address(token1),
+                true,
+                nativeWrapper,
+                address(datum),
+                0.995e4,
+                1.005e4,
+                positionManager,
+                universalRouter,
+                hook,
+                500,
+                10
+            )
+        );
 
         manager.setPayout(payout);
 
@@ -338,7 +339,12 @@ contract UniswapV4FluxManagerTest is Test {
 
         manager.claimFees(false);
 
-        assertApproxEqRel(token1.balanceOf(payout), expectedFeeToVaultInUsdc * manager.performanceFee() / 1e4, 1e16, "Claimed Fee should equal expected");
+        assertApproxEqRel(
+            token1.balanceOf(payout),
+            expectedFeeToVaultInUsdc * manager.performanceFee() / 1e4,
+            1e16,
+            "Claimed Fee should equal expected"
+        );
     }
 
     // ========================================= HELPER FUNCTIONS =========================================
