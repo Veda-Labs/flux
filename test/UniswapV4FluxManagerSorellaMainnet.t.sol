@@ -217,6 +217,93 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
         assertApproxEqRel(token0Balance, 2 * usdcAmount, 0.02e18, "token1Balance should equate to original usdcAmount");
     }
 
+    function testLiquidityManagementMultiplePositions(uint256 ethAmount, uint256 usdcAmount) external {
+        ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
+        usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
+        deal(nativeWrapper, address(boringVault), 4 * ethAmount);
+        deal(address(token0), address(boringVault), 4 * usdcAmount);
+
+        (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
+
+        uint256 price = 0.00037878787e18;
+
+        int24 tickLower = -887_220;
+        int24 tickUpper = 887_220;
+        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(tickUpper),
+            usdcAmount,
+            ethAmount
+        );
+        uint128 liquidity1 = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(tickUpper),
+            usdcAmount / 2,
+            ethAmount / 2
+        );
+        uint128 liquidity2 = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(197130),
+            0,
+            ethAmount / 2
+        );
+        console.log("liquidity2", liquidity2);
+        uint128 liquidity3 = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(197120),
+            TickMath.getSqrtRatioAtTick(197130),
+            usdcAmount / 2,
+            ethAmount / 2
+        );
+
+        UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
+        actions[0].data = abi.encode(tickLower, tickUpper, liquidity, usdcAmount, ethAmount, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.INCREASE_LIQUIDITY;
+        actions[0].data = abi.encode(manager.trackedPositions(0), liquidity, usdcAmount, ethAmount, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
+        actions[0].data = abi.encode(tickLower, tickUpper, liquidity1, usdcAmount / 2, ethAmount / 2, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
+        actions[0].data = abi.encode(tickLower, 197130, liquidity2, 0, ethAmount / 2, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
+        actions[0].data = abi.encode(197120, 197130, liquidity3, usdcAmount / 2, ethAmount / 2, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.DECREASE_LIQUIDITY;
+        actions[0].data = abi.encode(manager.trackedPositions(0), liquidity, 0, 0, block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.COLLECT_FEES;
+        actions[0].data = abi.encode(manager.trackedPositions(0), block.timestamp);
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.DECREASE_LIQUIDITY;
+        actions[0].data = abi.encode(manager.trackedPositions(3), liquidity3 / 2, 0, 0, block.timestamp);
+        manager.rebalance(price, actions);
+
+        (uint256 token0Balance, uint256 token1Balance) = manager.totalAssets(price);
+        assertApproxEqRel(token1Balance, 4 * ethAmount, 0.02e18, "token0Balance should equate to original ethAmount");
+        assertApproxEqRel(token0Balance, 4 * usdcAmount, 0.02e18, "token1Balance should equate to original usdcAmount");
+    }
+
     function testSwapping() external {
         uint256 ethAmount = 1e18;
         uint256 usdcAmount = 10_000e6;
