@@ -473,6 +473,8 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     {
         if (isPaused) revert IntentsTeller__Paused();
 
+        if (depositData.isWithdrawal) revert IntentsTeller__ActionMismatch();
+
         shares = _erc20Deposit(depositData, enforceShareLock);
     }
 
@@ -483,6 +485,8 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      */
     function withdraw(ActionData calldata withdrawData) external requiresAuth returns (uint256 assetsOut) {
         if (isPaused) revert IntentsTeller__Paused();
+
+        if (!withdrawData.isWithdrawal) revert IntentsTeller__ActionMismatch();
 
         assetsOut = _erc20Withdraw(withdrawData);
     }

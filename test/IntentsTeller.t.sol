@@ -922,7 +922,7 @@ contract IntentsTellerTest is Test {
         vm.stopPrank();
 
         // Deposit using executor
-        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
+        vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ActionMismatch.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
                 isWithdrawal: true, // This causes the expected failure
@@ -1641,7 +1641,7 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__AssetNotSupported.selector));
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                isWithdrawal: true,
                 user: testUser0,
                 to: testUser0,
                 asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7), // This causes the expected failure
