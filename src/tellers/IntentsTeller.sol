@@ -34,7 +34,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      * @notice Data structure for deposit and withdrawal actions
      * @param isWithdrawal Whether this is a withdrawal action (true) or deposit action (false)
      * @param user The address of the user performing the action
-     * @param to The recipient address for the action
      * @param asset The ERC20 token being deposited or withdrawn
      * @param amountIn The amount of shares/tokens being deposited or withdrawn
      * @param minimumOut The minimum amount of shares/tokens expected from the action
@@ -45,7 +44,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     struct ActionData {
         bool isWithdrawal;
         address user;
-        address to;
         ERC20 asset;
         uint256 amountIn;
         uint256 minimumOut;
@@ -545,7 +543,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
             revert IntentsTeller__MinimumMintNotMet();
         }
 
-        vault.enter(depositData.user, depositData.asset, depositData.amountIn, depositData.to, shares);
+        vault.enter(depositData.user, depositData.asset, depositData.amountIn, depositData.user, shares);
 
         if (enforceShareLock) {
             _afterPublicDeposit(depositData.user, depositData.asset, depositData.amountIn, shares, shareLockPeriod);
@@ -574,7 +572,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
             revert IntentsTeller__MinimumAssetsNotMet();
         }
 
-        vault.exit(withdrawData.to, withdrawData.asset, assetsOut, withdrawData.user, withdrawData.amountIn);
+        vault.exit(withdrawData.user, withdrawData.asset, assetsOut, withdrawData.user, withdrawData.amountIn);
         emit Withdraw(address(withdrawData.asset), withdrawData.amountIn);
     }
 
@@ -617,7 +615,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
             keccak256(
                 abi.encode(
                     address(this), // teller
-                    actionData.to, // receiver
                     actionData.asset, // asset
                     actionData.isWithdrawal, // type
                     actionData.amountIn, // amount

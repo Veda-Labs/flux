@@ -24,7 +24,6 @@ contract IntentsTellerTest is Test {
     struct SigData {
         uint256 pK;
         address teller;
-        address to;
         address asset;
         bool isWithdrawal;
         uint256 amountIn;
@@ -147,7 +146,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -157,7 +155,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -187,7 +184,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -197,7 +193,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -216,7 +211,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount / 2,
                 minimumOut: 1,
@@ -226,7 +220,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true,
                         amount / 2,
@@ -251,7 +244,6 @@ contract IntentsTellerTest is Test {
             SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                testUser0,
                 address(token1),
                 false,
                 amount,
@@ -263,7 +255,6 @@ contract IntentsTellerTest is Test {
         IntentsTeller.ActionData memory depositData = IntentsTeller.ActionData({
             isWithdrawal: false,
             user: testUser0,
-            to: testUser0,
             asset: token1,
             amountIn: amount,
             minimumOut: 0,
@@ -303,7 +294,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -313,7 +303,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -332,7 +321,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -342,7 +330,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -368,7 +355,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount / 2,
                 minimumOut: 1,
@@ -378,7 +364,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true,
                         amount / 2,
@@ -397,7 +382,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount / 2,
                 minimumOut: 1,
@@ -407,7 +391,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true,
                         amount / 2,
@@ -438,7 +421,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -448,7 +430,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -547,7 +528,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -557,7 +537,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -597,7 +576,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -607,7 +585,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -643,7 +620,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token0,
                 amountIn: amount,
                 minimumOut: 1,
@@ -653,7 +629,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token0),
                         false,
                         amount,
@@ -673,7 +648,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: token0,
                 amountIn: 1589835727,
                 minimumOut: 1,
@@ -683,7 +657,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token0),
                         true,
                         1589835727,
@@ -713,7 +686,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -723,7 +695,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -749,7 +720,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser1,
-                to: testUser1,
                 asset: token0,
                 amountIn: amount1,
                 minimumOut: 0,
@@ -759,7 +729,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser1Pk,
                         address(intentsTeller),
-                        testUser1,
                         address(token0),
                         false,
                         amount1,
@@ -779,7 +748,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 1,
@@ -789,7 +757,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true,
                         amount,
@@ -807,7 +774,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser1,
-                to: testUser1,
                 asset: token0,
                 amountIn: 1589835727,
                 minimumOut: 1,
@@ -817,7 +783,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser1Pk,
                         address(intentsTeller),
-                        testUser1,
                         address(token0),
                         true,
                         1589835727,
@@ -842,12 +807,11 @@ contract IntentsTellerTest is Test {
         token1.approve(address(boringVault), type(uint256).max);
         vm.stopPrank();
 
-        // Generate signature for user 0 to deposit 1e10 USDC to user 1
+        // Generate signature for user 0 to deposit 1e10 USDC to user 0
         bytes memory depositSig = _generateSignature(
             SigData(
                 testUser0Pk,
                 address(intentsTeller),
-                testUser1,
                 address(token1),
                 false,
                 amount,
@@ -856,12 +820,11 @@ contract IntentsTellerTest is Test {
             )
         );
 
-        // Generate signature for user 1 to withdraw 5e9 USDC to user 0
+        // Generate signature for user 0 to withdraw 5e9 USDC to user 0
         bytes memory withdrawSig = _generateSignature(
             SigData(
-                testUser1Pk,
+                testUser0Pk,
                 address(intentsTeller),
-                testUser0,
                 address(token1),
                 true,
                 amount / 2,
@@ -875,7 +838,6 @@ contract IntentsTellerTest is Test {
         actions[0] = IntentsTeller.ActionData({
             isWithdrawal: false,
             user: testUser0,
-            to: testUser1,
             asset: token1,
             amountIn: amount,
             minimumOut: 0,
@@ -885,8 +847,7 @@ contract IntentsTellerTest is Test {
         });
         actions[1] = IntentsTeller.ActionData({
             isWithdrawal: true,
-            user: testUser1,
-            to: testUser0,
+            user: testUser0,
             asset: token1,
             amountIn: amount / 2,
             minimumOut: 0,
@@ -903,10 +864,8 @@ contract IntentsTellerTest is Test {
         intentsTeller.bulkActions(actions, enforceShareLock);
 
         // Check that the actions were successful
-        assertEq(boringVault.balanceOf(testUser1), amount / 2);
-        assertEq(boringVault.balanceOf(testUser0), 0);
+        assertEq(boringVault.balanceOf(testUser0), amount / 2);
         assertEq(token1.balanceOf(testUser0), amount / 2);
-        assertEq(token1.balanceOf(testUser1), 0);
     }
 
     // ========================================= TESTS FOR FAILURES =========================================
@@ -927,7 +886,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true, // This causes the expected failure
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -937,7 +895,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -966,7 +923,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -976,7 +932,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true, // This causes the expected failure
                         amount,
@@ -1005,7 +960,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount / 2, // This causes the expected failure
                 minimumOut: 0,
@@ -1015,7 +969,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true,
                         amount,
@@ -1044,7 +997,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser1, // This causes the failure
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -1054,7 +1006,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1067,10 +1018,11 @@ contract IntentsTellerTest is Test {
         );
     }
 
-    function testDepositFailsToDifferentUser() external {
+    function testDepositFailsDifferentAsset() external {
         uint256 amount = 1e10;
         // Fund test user with tokens.
         deal(address(token1), testUser0, amount);
+        deal(address(token0), testUser0, amount);
 
         // Give required approvals.
         vm.startPrank(address(testUser0));
@@ -1083,7 +1035,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser1, // This causes the expected failure
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -1093,8 +1044,7 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
-                        address(token1),
+                        address(token0),
                         false,
                         amount,
                         0,
@@ -1122,7 +1072,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -1132,7 +1081,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1161,7 +1109,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -1171,7 +1118,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1200,7 +1146,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 1e10 + 1, // This causes the expected failure
@@ -1210,7 +1155,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1238,7 +1182,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -1248,7 +1191,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1266,7 +1208,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount / 2,
                 minimumOut: 1e10 + 1, // This causes the expected failure
@@ -1276,7 +1217,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true,
                         amount / 2,
@@ -1308,7 +1248,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 1e10,
@@ -1318,7 +1257,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1340,7 +1278,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 1e10,
@@ -1350,7 +1287,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1378,7 +1314,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 1e10,
@@ -1388,7 +1323,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1410,7 +1344,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 1e10,
@@ -1420,7 +1353,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true,
                         amount,
@@ -1441,7 +1373,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 1e10,
@@ -1451,7 +1382,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true,
                         amount,
@@ -1479,7 +1409,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: 0, // This causes the expected failure
                 minimumOut: 0,
@@ -1489,7 +1418,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         0,
@@ -1517,7 +1445,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -1527,7 +1454,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1545,7 +1471,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: 0, // This causes the expected failure
                 minimumOut: 0,
@@ -1555,7 +1480,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         true,
                         0,
@@ -1577,7 +1501,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7), // This causes the expected failure
                 amountIn: amount,
                 minimumOut: 0,
@@ -1587,7 +1510,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         0xdAC17F958D2ee523a2206206994597C13D831ec7,
                         false,
                         amount,
@@ -1615,7 +1537,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -1625,7 +1546,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1643,7 +1563,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: true,
                 user: testUser0,
-                to: testUser0,
                 asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7), // This causes the expected failure
                 amountIn: amount,
                 minimumOut: 1,
@@ -1653,7 +1572,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         0xdAC17F958D2ee523a2206206994597C13D831ec7,
                         false,
                         amount,
@@ -1682,7 +1600,6 @@ contract IntentsTellerTest is Test {
             IntentsTeller.ActionData({
                 isWithdrawal: false,
                 user: testUser0,
-                to: testUser0,
                 asset: token1,
                 amountIn: amount,
                 minimumOut: 0,
@@ -1692,7 +1609,6 @@ contract IntentsTellerTest is Test {
                     SigData(
                         testUser0Pk,
                         address(intentsTeller),
-                        testUser0,
                         address(token1),
                         false,
                         amount,
@@ -1742,7 +1658,6 @@ contract IntentsTellerTest is Test {
         bytes32 hash = keccak256(
             abi.encode(
                 sigData.teller,
-                sigData.to,
                 sigData.asset,
                 sigData.isWithdrawal,
                 sigData.amountIn,
