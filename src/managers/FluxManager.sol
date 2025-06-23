@@ -181,15 +181,11 @@ abstract contract FluxManager is Auth {
         (uint256 token0Assets, uint256 token1Assets) = _totalAssets(exchangeRate);
         if (quoteIn0Or1) {
             // Return totalAssets in token0
-            uint256 converted = token1Assets * (10 ** decimals0);
-            converted = converted.mulDivDown(10 ** decimals1, exchangeRate);
-            converted /= 10 ** decimals1;
+            uint256 converted = token1Assets.mulDivDown(10 ** decimals0, exchangeRate);
             assets = token0Assets + converted;
         } else {
             // Return totalAssets in token1
-            uint256 converted = token0Assets * (10 ** decimals1);
-            converted = converted.mulDivDown(exchangeRate, 10 ** decimals1);
-            converted /= 10 ** decimals0;
+            uint256 converted = token0Assets.mulDivDown(exchangeRate, 10 ** decimals0);
             assets = token1Assets + converted;
         }
     }
@@ -211,7 +207,7 @@ abstract contract FluxManager is Auth {
             } else if (!baseIn0Or1 && quoteIn0Or1) {
                 return uint256(10 ** decimals0).mulDivDown(10 ** decimals1, exchangeRate);
             } else if (baseIn0Or1 && !quoteIn0Or1) {
-                return uint256(10 ** decimals1).mulDivDown(exchangeRate, 10 ** decimals1);
+                return exchangeRate;
             } else if (!baseIn0Or1 && !quoteIn0Or1) {
                 return 10 ** decimals1;
             } else {
