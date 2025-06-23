@@ -531,8 +531,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
 
         _verifySignedMessage(depositData);
 
-        fluxManager.refreshInternalFluxAccounting();
-
         shares = depositData.amountIn.mulDivDown(
             ONE_SHARE, fluxManager.getRateSafe(depositData.rate, depositData.asset == token0)
         );
@@ -561,8 +559,6 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         if (withdrawData.amountIn == 0) revert IntentsTeller__ZeroShares();
 
         _verifySignedMessage(withdrawData);
-
-        fluxManager.refreshInternalFluxAccounting();
 
         assetsOut = withdrawData.amountIn.mulDivDown(
             fluxManager.getRateSafe(withdrawData.rate, withdrawData.asset == token0), ONE_SHARE

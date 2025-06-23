@@ -95,9 +95,6 @@ contract UniswapV4FluxManager is FluxManager {
     uint16 public rebalanceDeviationMax;
     mapping(address => bool) internal aggregators;
 
-    uint128 internal token0Balance;
-    uint128 internal token1Balance;
-
     uint256[] public trackedPositions;
 
     PositionData[] internal trackedPositionData;
@@ -176,15 +173,6 @@ contract UniswapV4FluxManager is FluxManager {
     /*                     FLUX FUNCTIONS                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Refresh internal flux constants.
-    /// @dev For Uniswap V4 this is token0 and token1 contract balances
-    function _refreshInternalFluxAccounting() internal override {
-        token0Balance = address(token0) == address(0)
-            ? SafeCast.toUint128(ERC20(nativeWrapper).balanceOf(address(boringVault)))
-            : SafeCast.toUint128(token0.balanceOf(address(boringVault)));
-        token1Balance = SafeCast.toUint128(token1.balanceOf(address(boringVault)));
-    }
-
     /// @notice exchangeRate must be given in terms of token1 decimals, and it should be the amount of token1 per token0
     function _totalAssets(uint256 exchangeRate)
         internal
@@ -192,8 +180,10 @@ contract UniswapV4FluxManager is FluxManager {
         override
         returns (uint256 token0Assets, uint256 token1Assets)
     {
-        token0Assets = token0Balance;
-        token1Assets = token1Balance;
+        token0Assets = address(token0) == address(0)
+            ? SafeCast.toUint128(ERC20(nativeWrapper).balanceOf(address(boringVault)) + address(boringVault).balance)
+            : SafeCast.toUint128(token0.balanceOf(address(boringVault)));
+        token1Assets = SafeCast.toUint128(token1.balanceOf(address(boringVault)));
 
         // Calculate the current sqrtPrice.
         uint256 ratioX192 = FullMath.mulDiv(exchangeRate, 2 ** 192, 10 ** decimals0);
@@ -223,7 +213,6 @@ contract UniswapV4FluxManager is FluxManager {
         checkDatum(exchangeRate)
         requiresAuth
     {
-        _refreshInternalFluxAccounting();
         if (address(token0) == address(0)) {
             _unwrapAllNative();
         }
@@ -291,7 +280,6 @@ contract UniswapV4FluxManager is FluxManager {
         if (address(token0) == address(0)) {
             _wrapAllNative();
         }
-        _refreshInternalFluxAccounting();
 
         // Make sure totalSupply is constant.
         if (totalSupplyBefore != boringVault.totalSupply()) revert UniswapV4FluxManager__RebalanceChangedTotalSupply();
