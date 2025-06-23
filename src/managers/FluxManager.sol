@@ -40,11 +40,8 @@ abstract contract FluxManager is Auth {
     uint16 public datumUpperBound;
 
     uint16 public performanceFee;
-    uint64 public lastPerformanceReview;
-    uint64 public performanceReviewFrequency;
     address public payout;
     uint128 public pendingFee;
-    uint128 totalSupplyLastReview;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         ERRORS                             */
