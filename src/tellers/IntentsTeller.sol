@@ -207,6 +207,16 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      */
     ERC20 public immutable token1;
 
+    /**
+     * @notice The native wrapper associated with fluxManager
+     */
+    address public immutable nativeWrapper;
+
+    /**
+     * @notice Whether the native wrapper is used for token0
+     */
+    bool public immutable token0IsNative;
+
     constructor(
         address _owner,
         address _vault,
@@ -220,6 +230,8 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         fluxManager = FluxManager(_fluxManager);
         token0 = fluxManager.token0();
         token1 = fluxManager.token1();
+        nativeWrapper = fluxManager.nativeWrapper();
+        token0IsNative = fluxManager.token0IsNative();
         maxDeadlinePeriod = uint64(_maxDeadlinePeriod);
         permissionedTransfers = false;
     }
@@ -256,7 +268,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         if (sharePremium > MAX_SHARE_PREMIUM) {
             revert IntentsTeller__SharePremiumTooLarge();
         }
-        if (asset != token0 && asset != token1) {
+        if (asset != (token0IsNative ? ERC20(nativeWrapper) : token0) && asset != token1) {
             revert IntentsTeller__OnlyPoolTokens();
         }
         assetData[asset] = Asset(allowDeposits, allowWithdraws, sharePremium);
@@ -532,7 +544,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         _verifySignedMessage(depositData);
 
         shares = depositData.amountIn.mulDivDown(
-            ONE_SHARE, fluxManager.getRateSafe(depositData.rate, depositData.asset == token0)
+            ONE_SHARE, fluxManager.getRateSafe(depositData.rate, (depositData.asset == token0 || token0IsNative && depositData.asset == ERC20(nativeWrapper)))
         );
 
         Asset memory asset = _beforeDeposit(depositData.asset);
@@ -561,7 +573,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         _verifySignedMessage(withdrawData);
 
         assetsOut = withdrawData.amountIn.mulDivDown(
-            fluxManager.getRateSafe(withdrawData.rate, withdrawData.asset == token0), ONE_SHARE
+            fluxManager.getRateSafe(withdrawData.rate, (withdrawData.asset == token0 || token0IsNative && withdrawData.asset == ERC20(nativeWrapper))), ONE_SHARE
         );
 
         if (assetsOut < withdrawData.minimumOut) {

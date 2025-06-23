@@ -180,7 +180,7 @@ contract UniswapV4FluxManager is FluxManager {
         override
         returns (uint256 token0Assets, uint256 token1Assets)
     {
-        token0Assets = address(token0) == address(0)
+        token0Assets = token0IsNative
             ? SafeCast.toUint128(ERC20(nativeWrapper).balanceOf(address(boringVault)) + address(boringVault).balance)
             : SafeCast.toUint128(token0.balanceOf(address(boringVault)));
         token1Assets = SafeCast.toUint128(token1.balanceOf(address(boringVault)));
@@ -213,7 +213,7 @@ contract UniswapV4FluxManager is FluxManager {
         checkDatum(exchangeRate)
         requiresAuth
     {
-        if (address(token0) == address(0)) {
+        if (token0IsNative) {
             _unwrapAllNative();
         }
         uint256 totalSupplyBefore = boringVault.totalSupply();
@@ -277,7 +277,7 @@ contract UniswapV4FluxManager is FluxManager {
                 _swapWithAggregator(aggregator, amount, token0Or1, minAmountOut, swapData);
             }
         }
-        if (address(token0) == address(0)) {
+        if (token0IsNative) {
             _wrapAllNative();
         }
 
@@ -357,7 +357,7 @@ contract UniswapV4FluxManager is FluxManager {
         params[2] = abi.encode(token0, boringVault);
         params[3] = abi.encode(token1, boringVault);
         uint256 positionId = positionManager.nextTokenId();
-        _modifyLiquidities(actions, params, deadline, address(token0) == address(0) ? amount0Max : 0);
+        _modifyLiquidities(actions, params, deadline, token0IsNative ? amount0Max : 0);
 
         // Track new position.
         trackedPositions.push(positionId);
@@ -393,7 +393,7 @@ contract UniswapV4FluxManager is FluxManager {
         params[2] = abi.encode(token0, boringVault);
         params[3] = abi.encode(token1, boringVault);
 
-        _modifyLiquidities(actions, params, deadline, address(token0) == address(0) ? amount0Max : 0);
+        _modifyLiquidities(actions, params, deadline, token0IsNative ? amount0Max : 0);
 
         _incrementLiquidity(positionId, liquidity);
     }
@@ -461,7 +461,7 @@ contract UniswapV4FluxManager is FluxManager {
         // Execute the swap
         bytes memory swapData = abi.encodeWithSelector(IUniversalRouter.execute.selector, commands, inputs, deadline);
 
-        boringVault.manage(universalRouter, swapData, address(token0) == address(0) ? amount0In : 0);
+        boringVault.manage(universalRouter, swapData, token0IsNative ? amount0In : 0);
     }
 
     function _swapToken1ForToken0InPool(
@@ -523,13 +523,13 @@ contract UniswapV4FluxManager is FluxManager {
         }
 
         uint256 token0Starting =
-            address(token0) == address(0) ? address(boringVault).balance : token0.balanceOf(address(boringVault));
+            token0IsNative ? address(boringVault).balance : token0.balanceOf(address(boringVault));
         uint256 token1Starting = token1.balanceOf(address(boringVault));
 
-        boringVault.manage(aggregator, swapData, token0Or1 && address(token0) == address(0) ? amount : 0);
+        boringVault.manage(aggregator, swapData, token0Or1 && token0IsNative ? amount : 0);
 
         uint256 token0Ending =
-            address(token0) == address(0) ? address(boringVault).balance : token0.balanceOf(address(boringVault));
+            token0IsNative ? address(boringVault).balance : token0.balanceOf(address(boringVault));
         uint256 token1Ending = token1.balanceOf(address(boringVault));
 
         // no need to check that entire approval was used as we revert if the input token balance is not decremented by amount.

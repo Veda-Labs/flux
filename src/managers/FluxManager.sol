@@ -77,14 +77,15 @@ abstract contract FluxManager is Auth {
     /*                       IMMUTABLES                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    BoringVault internal immutable boringVault;
+    BoringVault public immutable boringVault;
     ERC20 public immutable token0;
     ERC20 public immutable token1;
     uint8 internal immutable decimals0;
     uint8 internal immutable decimals1;
     uint8 internal immutable decimalsBoring;
-    bool internal immutable baseIn0Or1; // Only used for initial share price when zero shares outstanding, and for totalAssets check
-    address internal immutable nativeWrapper;
+    bool public immutable baseIn0Or1; // Only used for initial share price when zero shares outstanding, and for totalAssets check
+    bool public immutable token0IsNative;
+    address public immutable nativeWrapper;
 
     constructor(
         address _owner,
@@ -104,6 +105,7 @@ abstract contract FluxManager is Auth {
         decimals1 = token1.decimals();
         decimalsBoring = boringVault.decimals();
         baseIn0Or1 = _baseIn0Or1;
+        token0IsNative = _token0 == address(0);
         nativeWrapper = _nativeWrapper;
         datum = IDatum(_datum);
 
