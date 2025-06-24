@@ -52,7 +52,7 @@ contract UniswapV4FluxManager is FluxManager {
     }
 
     struct PositionData {
-        uint128 liquidity;
+        uint256 liquidity;
         int24 tickLower;
         int24 tickUpper;
     }
@@ -197,7 +197,7 @@ contract UniswapV4FluxManager is FluxManager {
                 sqrtPriceX96,
                 TickMath.getSqrtRatioAtTick(data.tickLower),
                 TickMath.getSqrtRatioAtTick(data.tickUpper),
-                data.liquidity
+                uint128(data.liquidity)
             );
             token0Assets += amount0;
             token1Assets += amount1;
@@ -242,23 +242,23 @@ contract UniswapV4FluxManager is FluxManager {
                 (
                     int24 tickLower,
                     int24 tickUpper,
-                    uint128 liquidity,
-                    uint256 amount0Max,
-                    uint256 amount1Max,
+                    uint256 liquidity,
+                    uint128 amount0Max,
+                    uint128 amount1Max,
                     uint256 deadline
-                ) = abi.decode(action.data, (int24, int24, uint128, uint256, uint256, uint256));
+                ) = abi.decode(action.data, (int24, int24, uint256, uint128, uint128, uint256));
                 _mint(tickLower, tickUpper, liquidity, amount0Max, amount1Max, deadline);
             } else if (action.kind == ActionKind.BURN) {
-                (uint256 positionId, uint256 amount0Min, uint256 amount1Min, uint256 deadline) =
-                    abi.decode(action.data, (uint256, uint256, uint256, uint256));
+                (uint256 positionId, uint128 amount0Min, uint128 amount1Min, uint256 deadline) =
+                    abi.decode(action.data, (uint256, uint128, uint128, uint256));
                 _burn(positionId, amount0Min, amount1Min, deadline);
             } else if (action.kind == ActionKind.INCREASE_LIQUIDITY) {
-                (uint256 positionId, uint128 liquidity, uint256 amount0Max, uint256 amount1Max, uint256 deadline) =
-                    abi.decode(action.data, (uint256, uint128, uint256, uint256, uint256));
+                (uint256 positionId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, uint256 deadline) =
+                    abi.decode(action.data, (uint256, uint256, uint128, uint128, uint256));
                 _increaseLiquidity(positionId, liquidity, amount0Max, amount1Max, deadline);
             } else if (action.kind == ActionKind.DECREASE_LIQUIDITY) {
-                (uint256 positionId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) =
-                    abi.decode(action.data, (uint256, uint128, uint256, uint256, uint256));
+                (uint256 positionId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, uint256 deadline) =
+                    abi.decode(action.data, (uint256, uint256, uint128, uint128, uint256));
                 _decreaseLiquidity(positionId, liquidity, amount0Min, amount1Min, deadline);
             } else if (action.kind == ActionKind.COLLECT_FEES) {
                 (uint256 positionId, uint256 deadline) = abi.decode(action.data, (uint256, uint256));
@@ -270,7 +270,7 @@ contract UniswapV4FluxManager is FluxManager {
             } else if (action.kind == ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL) {
                 (uint128 amount1In, uint128 minAmount0Out, uint256 deadline, bytes memory hookData) =
                     abi.decode(action.data, (uint128, uint128, uint256, bytes));
-                _swapToken0ForToken1InPool(amount1In, minAmount0Out, deadline, hookData);
+                _swapToken1ForToken0InPool(amount1In, minAmount0Out, deadline, hookData);
             } else if (action.kind == ActionKind.SWAP_WITH_AGGREGATOR) {
                 (address aggregator, uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData) =
                     abi.decode(action.data, (address, uint256, bool, uint256, bytes));
@@ -340,9 +340,9 @@ contract UniswapV4FluxManager is FluxManager {
     function _mint(
         int24 tickLower,
         int24 tickUpper,
-        uint128 liquidity,
-        uint256 amount0Max,
-        uint256 amount1Max,
+        uint256 liquidity,
+        uint128 amount0Max,
+        uint128 amount1Max,
         uint256 deadline
     ) internal {
         bytes memory actions = abi.encodePacked(
@@ -364,7 +364,7 @@ contract UniswapV4FluxManager is FluxManager {
         trackedPositionData.push(PositionData(liquidity, tickLower, tickUpper));
     }
 
-    function _burn(uint256 positionId, uint256 amount0Min, uint256 amount1Min, uint256 deadline) internal {
+    function _burn(uint256 positionId, uint128 amount0Min, uint128 amount1Min, uint256 deadline) internal {
         // Remove position from tracking if present.
         _removePositionIfPresent(positionId);
 
@@ -378,9 +378,9 @@ contract UniswapV4FluxManager is FluxManager {
 
     function _increaseLiquidity(
         uint256 positionId,
-        uint128 liquidity,
-        uint256 amount0Max,
-        uint256 amount1Max,
+        uint256 liquidity,
+        uint128 amount0Max,
+        uint128 amount1Max,
         uint256 deadline
     ) internal {
         bytes memory actions = abi.encodePacked(
@@ -400,9 +400,9 @@ contract UniswapV4FluxManager is FluxManager {
 
     function _decreaseLiquidity(
         uint256 positionId,
-        uint128 liquidity,
-        uint256 amount0Min,
-        uint256 amount1Min,
+        uint256 liquidity,
+        uint128 amount0Min,
+        uint128 amount1Min,
         uint256 deadline
     ) internal {
         bytes memory actions = abi.encodePacked(uint8(Actions.DECREASE_LIQUIDITY), uint8(Actions.TAKE_PAIR));
@@ -574,7 +574,7 @@ contract UniswapV4FluxManager is FluxManager {
         boringVault.manage(address(positionManager), data, value);
     }
 
-    function _incrementLiquidity(uint256 positionId, uint128 liquidity) internal {
+    function _incrementLiquidity(uint256 positionId, uint256 liquidity) internal {
         uint256 positionCount = trackedPositions.length;
         uint256 positionIndex = type(uint256).max;
         for (uint256 i; i < positionCount; ++i) {
@@ -591,7 +591,7 @@ contract UniswapV4FluxManager is FluxManager {
         }
     }
 
-    function _decrementLiquidity(uint256 positionId, uint128 liquidity) internal {
+    function _decrementLiquidity(uint256 positionId, uint256 liquidity) internal {
         uint256 positionCount = trackedPositions.length;
         uint256 positionIndex = type(uint256).max;
         for (uint256 i; i < positionCount; ++i) {

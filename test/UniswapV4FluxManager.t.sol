@@ -33,7 +33,7 @@ contract UniswapV4FluxManagerTest is Test {
     address internal ETH_USD_ORACLE = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
     address internal hook = address(0);
 
-    address internal payout = vm.addr(1);
+    address internal payout = vm.addr(999872);
 
     function setUp() external {
         // Setup forked environment.
@@ -96,8 +96,8 @@ contract UniswapV4FluxManagerTest is Test {
     function testMinting() external {
         // uint256 ethAmount = 3e18;
         // uint256 usdcAmount = 10_000e6;
-        uint256 ethAmount = 3384967315990850674;
-        uint256 usdcAmount = 8979053538;
+        uint128 ethAmount = 3384967315990850674;
+        uint128 usdcAmount = 8979053538;
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
@@ -114,7 +114,7 @@ contract UniswapV4FluxManagerTest is Test {
         int24 tickLower = -887_270;
         int24 tickUpper = 887_270;
 
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(tickUpper),
@@ -133,9 +133,9 @@ contract UniswapV4FluxManagerTest is Test {
         assertApproxEqRel(token1Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
     }
 
-    function testBurning(uint256 ethAmount, uint256 usdcAmount) external {
-        ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
-        usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
+    function testBurning(uint128 ethAmount, uint128 usdcAmount) external {
+        ethAmount = uint128(bound(ethAmount, 0.1e18, 1_000e18));
+        usdcAmount = uint128(bound(usdcAmount, 100e6, 1_000_000e6));
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
@@ -145,7 +145,7 @@ contract UniswapV4FluxManagerTest is Test {
 
         int24 tickLower = -887_270;
         int24 tickUpper = 887_270;
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(tickUpper),
@@ -168,9 +168,9 @@ contract UniswapV4FluxManagerTest is Test {
         assertApproxEqRel(token1Balance, usdcAmount, 0.0001e18, "token1Balance should equate to original usdcAmount");
     }
 
-    function testLiquidityManagement(uint256 ethAmount, uint256 usdcAmount) external {
-        ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
-        usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
+    function testLiquidityManagement(uint128 ethAmount, uint128 usdcAmount) external {
+        ethAmount = uint128(bound(ethAmount, 0.1e18, 1_000e18));
+        usdcAmount = uint128(bound(usdcAmount, 100e6, 1_000_000e6));
         deal(nativeWrapper, address(boringVault), 2 * ethAmount);
         deal(address(token1), address(boringVault), 2 * usdcAmount);
 
@@ -180,7 +180,7 @@ contract UniswapV4FluxManagerTest is Test {
 
         int24 tickLower = -887_270;
         int24 tickUpper = 887_270;
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(tickUpper),
@@ -216,12 +216,14 @@ contract UniswapV4FluxManagerTest is Test {
     }
 
     function testSwapping() external {
-        uint256 ethAmount = 1e18;
-        uint256 usdcAmount = 10_000e6;
+        uint128 ethAmount = 1e18;
+        uint128 usdcAmount = 10_000e6;
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
         uint256 price = 2_652.626362e6;
+
+        (uint256 originalAsset0Balance, uint256 originalAsset1Balance) = manager.totalAssets(price);
 
         UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](2);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN0_FOR_TOKEN1_IN_POOL;
@@ -229,6 +231,11 @@ contract UniswapV4FluxManagerTest is Test {
         actions[1].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
         actions[1].data = abi.encode(usdcAmount / 2, 0, block.timestamp, bytes(""));
         manager.rebalance(price, actions);
+
+        (uint256 newAsset0Balance, uint256 newAsset1Balance) = manager.totalAssets(price);
+
+        assertGt(newAsset0Balance, originalAsset0Balance, "asset0Balance should increase");
+        assertLt(newAsset1Balance, originalAsset1Balance, "asset1Balance should decrease");
     }
 
     function testAggregatorSwapping() external {
@@ -301,8 +308,8 @@ contract UniswapV4FluxManagerTest is Test {
 
     function testFees() external {
         // deposit huge amounts in order to be the primary LP and fee accruer
-        uint256 ethAmount = 1e18 * 1_000_000;
-        uint256 usdcAmount = 2_652.626362e6 * 1_000_000;
+        uint128 ethAmount = 1e18 * 1_000_000;
+        uint128 usdcAmount = 2_652.626362e6 * 1_000_000;
         deal(nativeWrapper, address(boringVault), 2 * ethAmount);
         deal(address(token1), address(boringVault), 2 * usdcAmount);
 
@@ -312,7 +319,7 @@ contract UniswapV4FluxManagerTest is Test {
 
         int24 tickLower = -887_270;
         int24 tickUpper = 887_270;
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(tickUpper),
@@ -325,9 +332,9 @@ contract UniswapV4FluxManagerTest is Test {
         actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
         manager.rebalance(price, actions);
 
-        deal(address(token1), address(boringVault), 100e6);
-        actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
-        actions[0].data = abi.encode(100e6, 0, block.timestamp, bytes(""));
+        deal(address(nativeWrapper), address(boringVault), 1e16);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN0_FOR_TOKEN1_IN_POOL;
+        actions[0].data = abi.encode(1e16, 0, block.timestamp, bytes(""));
         manager.rebalance(price, actions);
 
         actions = new UniswapV4FluxManager.Action[](1);
@@ -335,13 +342,74 @@ contract UniswapV4FluxManagerTest is Test {
         actions[0].data = abi.encode(manager.trackedPositions(0), block.timestamp);
         manager.rebalance(price, actions);
 
-        uint256 expectedFeeToVaultInUsdc = 5e4;
+        uint256 expectedFeeToVaultInWETH = 1e16 * 500 / 1e6;
+        console.log("expectedProfit", expectedFeeToVaultInWETH);
+        uint256 expectedFeePayout = expectedFeeToVaultInWETH * manager.performanceFee() / 1e4;
+        console.log("expectedFeePayout", expectedFeePayout);
 
-        manager.claimFees(false);
+        manager.claimFees();
+
+        console.log("actualFeePayout", ERC20(nativeWrapper).balanceOf(payout));
 
         assertApproxEqRel(
-            token1.balanceOf(payout),
-            expectedFeeToVaultInUsdc * manager.performanceFee() / 1e4,
+            ERC20(nativeWrapper).balanceOf(payout),
+            expectedFeePayout,
+            1e16,
+            "Claimed Fee should equal expected"
+        );
+    }
+
+    function testFeesOppositeSwap() external {
+        // deposit huge amounts in order to be the primary LP and fee accruer
+        uint128 ethAmount = 1e18 * 1_000_000;
+        uint128 usdcAmount = 2_652.626362e6 * 1_000_000;
+        deal(nativeWrapper, address(boringVault), 2 * ethAmount);
+        deal(address(token1), address(boringVault), 2 * usdcAmount);
+
+        (uint160 sqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, eth_usdc_pool_id);
+
+        uint256 price = 2_652.626362e6;
+
+        int24 tickLower = -887_270;
+        int24 tickUpper = 887_270;
+        uint256 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(tickUpper),
+            ethAmount,
+            usdcAmount
+        );
+
+        UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
+        actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
+        manager.rebalance(price, actions);
+
+        deal(address(token1), address(boringVault), 1000e6);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
+        actions[0].data = abi.encode(1000e6, 0, block.timestamp, bytes(""));
+        manager.rebalance(price, actions);
+
+        actions = new UniswapV4FluxManager.Action[](1);
+        actions[0].kind = UniswapV4FluxManager.ActionKind.COLLECT_FEES;
+        actions[0].data = abi.encode(manager.trackedPositions(0), block.timestamp);
+        manager.rebalance(price, actions);
+
+        uint256 ethPerUSDC = uint256(1e18) / 2652.626362e6;
+
+        uint256 expectedFeeToVaultInWETH = uint256(1000e6) * ethPerUSDC * 500 / 1e6;
+        console.log("expectedProfit", expectedFeeToVaultInWETH);
+        uint256 expectedFeePayout = expectedFeeToVaultInWETH * manager.performanceFee() / 1e4;
+        console.log("expectedFeePayout", expectedFeePayout);
+
+        deal(address(nativeWrapper), address(boringVault), 1e16);
+        manager.claimFees();
+
+        console.log("actualFeePayout", ERC20(nativeWrapper).balanceOf(payout));
+
+        assertApproxEqRel(
+            ERC20(nativeWrapper).balanceOf(payout),
+            expectedFeePayout,
             1e16,
             "Claimed Fee should equal expected"
         );

@@ -135,8 +135,8 @@ abstract contract FluxManager is Auth {
         emit Unpaused();
     }
 
-    function claimFees(bool token0Or1) external requiresAuth {
-        _claimFees(token0Or1);
+    function claimFees() external requiresAuth {
+        _claimFees();
     }
 
     function setPayout(address newPayout) external requiresAuth {
@@ -223,18 +223,12 @@ abstract contract FluxManager is Auth {
     /*                     FLUX INTERNAL                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function _claimFees(bool token0Or1) internal {
+    function _claimFees() internal {
         uint256 pending = pendingFee;
         if (pending > 0) {
-            address token = token0Or1 ? address(token0) : address(token1);
+            address token = baseIn0Or1 ? (token0IsNative ? address(nativeWrapper) : address(token0)) : address(token1);
             pendingFee = 0;
-            if (address(token) == address(0)) {
-                // Transfer it.
-                boringVault.manage(nativeWrapper, abi.encodeWithSelector(ERC20.transfer.selector, payout, pending), 0);
-            } else {
-                // Transfer it.
-                boringVault.manage(token, abi.encodeWithSelector(ERC20.transfer.selector, payout, pending), 0);
-            }
+            boringVault.manage(token, abi.encodeWithSelector(ERC20.transfer.selector, payout, pending), 0);
         }
     }
 

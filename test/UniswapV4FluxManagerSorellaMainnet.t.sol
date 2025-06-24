@@ -101,8 +101,8 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
     }
 
     function testMinting() external {
-        uint256 ethAmount = 1e16;
-        uint256 usdcAmount = 2640e4;
+        uint128 ethAmount = 1e16;
+        uint128 usdcAmount = 2640e4;
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token0), address(boringVault), usdcAmount);
 
@@ -119,7 +119,7 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
         int24 tickLower = -887_220;
         int24 tickUpper = 887_220;
 
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(tickUpper),
@@ -137,9 +137,9 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
         assertApproxEqRel(token0Balance, usdcAmount, 0.02e18, "token1Balance should equate to original usdcAmount");
     }
 
-    function testBurning(uint256 ethAmount, uint256 usdcAmount) external {
-        ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
-        usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
+    function testBurning(uint128 ethAmount, uint128 usdcAmount) external {
+        ethAmount = uint128(bound(ethAmount, 0.1e18, 1_000e18));
+        usdcAmount = uint128(bound(usdcAmount, 100e6, 1_000_000e6));
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token0), address(boringVault), usdcAmount);
 
@@ -149,7 +149,7 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
 
         int24 tickLower = -887_220;
         int24 tickUpper = 887_220;
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(tickUpper),
@@ -172,9 +172,9 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
         assertApproxEqRel(token0Balance, usdcAmount, 0.02e18, "token1Balance should equate to original usdcAmount");
     }
 
-    function testLiquidityManagement(uint256 ethAmount, uint256 usdcAmount) external {
-        ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
-        usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
+    function testLiquidityManagement(uint128 ethAmount, uint128 usdcAmount) external {
+        ethAmount = uint128(bound(ethAmount, 0.1e18, 1_000e18));
+        usdcAmount = uint128(bound(usdcAmount, 100e6, 1_000_000e6));
         deal(nativeWrapper, address(boringVault), 2 * ethAmount);
         deal(address(token0), address(boringVault), 2 * usdcAmount);
 
@@ -184,7 +184,7 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
 
         int24 tickLower = -887_220;
         int24 tickUpper = 887_220;
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(tickUpper),
@@ -217,9 +217,9 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
         assertApproxEqRel(token0Balance, 2 * usdcAmount, 0.02e18, "token1Balance should equate to original usdcAmount");
     }
 
-    function testLiquidityManagementMultiplePositions(uint256 ethAmount, uint256 usdcAmount) external {
-        ethAmount = bound(ethAmount, 0.1e18, 1_000e18);
-        usdcAmount = bound(usdcAmount, 100e6, 1_000_000e6);
+    function testLiquidityManagementMultiplePositions(uint128 ethAmount, uint128 usdcAmount) external {
+        ethAmount = uint128(bound(ethAmount, 0.1e18, 1_000e18));
+        usdcAmount = uint128(bound(usdcAmount, 100e6, 1_000_000e6));
         deal(nativeWrapper, address(boringVault), 4 * ethAmount);
         deal(address(token0), address(boringVault), 4 * usdcAmount);
 
@@ -229,21 +229,21 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
 
         int24 tickLower = -887_220;
         int24 tickUpper = 887_220;
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(tickUpper),
             usdcAmount,
             ethAmount
         );
-        uint128 liquidity1 = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity1 = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(tickUpper),
             usdcAmount / 2,
             ethAmount / 2
         );
-        uint128 liquidity2 = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity2 = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(tickLower),
             TickMath.getSqrtRatioAtTick(197130),
@@ -251,7 +251,7 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
             ethAmount / 2
         );
         console.log("liquidity2", liquidity2);
-        uint128 liquidity3 = LiquidityAmounts.getLiquidityForAmounts(
+        uint256 liquidity3 = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
             TickMath.getSqrtRatioAtTick(197120),
             TickMath.getSqrtRatioAtTick(197130),
@@ -305,8 +305,8 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
     }
 
     function testSwapping() external {
-        uint256 ethAmount = 1e18;
-        uint256 usdcAmount = 10_000e6;
+        uint128 ethAmount = 1e18;
+        uint128 usdcAmount = 10_000e6;
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token1), address(boringVault), usdcAmount);
 
@@ -327,8 +327,8 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
 
     function testAggregatorSwapping() external {
         manager.setAggregator(address(this), true);
-        uint256 ethAmount = 1e18;
-        uint256 usdcAmount = 10_000e6;
+        uint128 ethAmount = 1e18;
+        uint128 usdcAmount = 10_000e6;
         deal(nativeWrapper, address(boringVault), ethAmount);
         deal(address(token0), address(boringVault), usdcAmount);
 
