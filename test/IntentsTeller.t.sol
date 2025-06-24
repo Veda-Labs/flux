@@ -153,13 +153,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -191,13 +185,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -218,13 +206,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true,
-                        amount / 2,
-                        1,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), true, amount / 2, 1, block.timestamp + 1 days
                     )
                 )
             })
@@ -241,15 +223,7 @@ contract IntentsTellerTest is Test {
         deal(address(token1), testUser0, amount);
 
         bytes memory depositSig = _generateSignature(
-            SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                address(token1),
-                false,
-                amount,
-                0,
-                block.timestamp + 1 days
-            )
+            SigData(testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days)
         );
 
         IntentsTeller.ActionData memory depositData = IntentsTeller.ActionData({
@@ -301,13 +275,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -328,13 +296,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -362,13 +324,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true,
-                        amount / 2,
-                        1,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), true, amount / 2, 1, block.timestamp + 1 days
                     )
                 )
             })
@@ -389,13 +345,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true,
-                        amount / 2,
-                        1,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), true, amount / 2, 1, block.timestamp + 1 days
                     )
                 )
             })
@@ -428,13 +378,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -535,13 +479,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -583,13 +521,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -627,13 +559,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token0),
-                        false,
-                        amount,
-                        1,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token0), false, amount, 1, block.timestamp + 1 days
                     )
                 )
             }),
@@ -655,13 +581,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token0),
-                        true,
-                        1589835727,
-                        1,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token0), true, 1589835727, 1, block.timestamp + 1 days
                     )
                 )
             })
@@ -693,13 +613,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -727,13 +641,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser1Pk,
-                        address(intentsTeller),
-                        address(token0),
-                        false,
-                        amount1,
-                        0,
-                        block.timestamp + 1 days
+                        testUser1Pk, address(intentsTeller), address(token0), false, amount1, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -754,15 +662,7 @@ contract IntentsTellerTest is Test {
                 rate: 1589835727,
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true,
-                        amount,
-                        1,
-                        block.timestamp + 1 days
-                    )
+                    SigData(testUser0Pk, address(intentsTeller), address(token1), true, amount, 1, block.timestamp + 1 days)
                 )
             })
         );
@@ -781,13 +681,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser1Pk,
-                        address(intentsTeller),
-                        address(token0),
-                        true,
-                        1589835727,
-                        1,
-                        block.timestamp + 1 days
+                        testUser1Pk, address(intentsTeller), address(token0), true, 1589835727, 1, block.timestamp + 1 days
                     )
                 )
             })
@@ -809,28 +703,12 @@ contract IntentsTellerTest is Test {
 
         // Generate signature for user 0 to deposit 1e10 USDC to user 0
         bytes memory depositSig = _generateSignature(
-            SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                address(token1),
-                false,
-                amount,
-                0,
-                block.timestamp + 1 days
-            )
+            SigData(testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days)
         );
 
         // Generate signature for user 0 to withdraw 5e9 USDC to user 0
         bytes memory withdrawSig = _generateSignature(
-            SigData(
-                testUser0Pk,
-                address(intentsTeller),
-                address(token1),
-                true,
-                amount / 2,
-                0,
-                block.timestamp + 1 days
-            )
+            SigData(testUser0Pk, address(intentsTeller), address(token1), true, amount / 2, 0, block.timestamp + 1 days)
         );
 
         // Generate Array of actions
@@ -893,13 +771,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -966,15 +838,7 @@ contract IntentsTellerTest is Test {
                 rate: 1589835727,
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
-                    )
+                    SigData(testUser0Pk, address(intentsTeller), address(token1), true, amount, 0, block.timestamp + 1 days)
                 )
             }),
             true
@@ -1004,13 +868,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -1042,13 +900,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token0),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token0), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -1078,15 +930,7 @@ contract IntentsTellerTest is Test {
                 rate: 1589835727,
                 deadline: block.timestamp - 1, // This causes the expected failure
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp - 1
-                    )
+                    SigData(testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp - 1)
                 )
             }),
             true
@@ -1116,13 +960,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 7 days + 1, // This causes the expected failure
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 7 days + 1
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 7 days + 1
                     )
                 )
             }),
@@ -1189,13 +1027,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -1255,13 +1087,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        1e10,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 1e10, block.timestamp + 1 days
                     )
                 )
             }),
@@ -1285,13 +1111,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        1e10,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 1e10, block.timestamp + 1 days
                     )
                 )
             }),
@@ -1321,13 +1141,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        1e10,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 1e10, block.timestamp + 1 days
                     )
                 )
             }),
@@ -1351,13 +1165,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true,
-                        amount,
-                        1e10,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), true, amount, 1e10, block.timestamp + 1 days
                     )
                 )
             })
@@ -1380,13 +1188,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true,
-                        amount,
-                        1e10,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), true, amount, 1e10, block.timestamp + 1 days
                     )
                 )
             })
@@ -1415,15 +1217,7 @@ contract IntentsTellerTest is Test {
                 rate: 1589835727,
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        0,
-                        0,
-                        block.timestamp + 1 days
-                    )
+                    SigData(testUser0Pk, address(intentsTeller), address(token1), false, 0, 0, block.timestamp + 1 days)
                 )
             }),
             false
@@ -1452,13 +1246,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -1477,15 +1265,7 @@ contract IntentsTellerTest is Test {
                 rate: 1589835727,
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true,
-                        0,
-                        0,
-                        block.timestamp + 1 days
-                    )
+                    SigData(testUser0Pk, address(intentsTeller), address(token1), true, 0, 0, block.timestamp + 1 days)
                 )
             })
         );
@@ -1544,13 +1324,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),
@@ -1607,13 +1381,7 @@ contract IntentsTellerTest is Test {
                 deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
                     SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
+                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
                     )
                 )
             }),

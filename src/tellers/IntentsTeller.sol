@@ -544,7 +544,11 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         _verifySignedMessage(depositData);
 
         shares = depositData.amountIn.mulDivDown(
-            ONE_SHARE, fluxManager.getRateSafe(depositData.rate, (depositData.asset == token0 || token0IsNative && depositData.asset == ERC20(nativeWrapper)))
+            ONE_SHARE,
+            fluxManager.getRateSafe(
+                depositData.rate,
+                (depositData.asset == token0 || token0IsNative && depositData.asset == ERC20(nativeWrapper))
+            )
         );
 
         Asset memory asset = _beforeDeposit(depositData.asset);
@@ -573,7 +577,11 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         _verifySignedMessage(withdrawData);
 
         assetsOut = withdrawData.amountIn.mulDivDown(
-            fluxManager.getRateSafe(withdrawData.rate, (withdrawData.asset == token0 || token0IsNative && withdrawData.asset == ERC20(nativeWrapper))), ONE_SHARE
+            fluxManager.getRateSafe(
+                withdrawData.rate,
+                (withdrawData.asset == token0 || token0IsNative && withdrawData.asset == ERC20(nativeWrapper))
+            ),
+            ONE_SHARE
         );
 
         if (assetsOut < withdrawData.minimumOut) {

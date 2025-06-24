@@ -351,10 +351,7 @@ contract UniswapV4FluxManagerTest is Test {
         console.log("actualFeePayout", ERC20(nativeWrapper).balanceOf(payout));
 
         assertApproxEqRel(
-            ERC20(nativeWrapper).balanceOf(payout),
-            expectedFeePayout,
-            1e16,
-            "Claimed Fee should equal expected"
+            ERC20(nativeWrapper).balanceOf(payout), expectedFeePayout, 1e16, "Claimed Fee should equal expected"
         );
     }
 
@@ -378,7 +375,7 @@ contract UniswapV4FluxManagerTest is Test {
             ethAmount,
             usdcAmount
         );
-        
+
         console.log("\nMINT: ");
         UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
@@ -408,10 +405,7 @@ contract UniswapV4FluxManagerTest is Test {
         console.log("actualFeePayout", ERC20(nativeWrapper).balanceOf(payout));
 
         assertApproxEqRel(
-            ERC20(nativeWrapper).balanceOf(payout),
-            expectedFeePayout,
-            1e16,
-            "Claimed Fee should equal expected"
+            ERC20(nativeWrapper).balanceOf(payout), expectedFeePayout, 1e16, "Claimed Fee should equal expected"
         );
     }
 

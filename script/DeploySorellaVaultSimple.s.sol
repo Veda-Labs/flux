@@ -35,7 +35,7 @@ contract DeploySorellaVaultSimple is Script {
 
     uint24 internal poolFee = uint24(0x800000);
     int24 internal tickSpacing = int24(10);
-    
+
     function run() public {
         vm.startBroadcast();
         /// DEPLOY CONTRACTS
@@ -51,7 +51,7 @@ contract DeploySorellaVaultSimple is Script {
 
         // deploy datum
         datum = new ChainlinkDatum(ETH_USD_ORACLE, 1 days, true);
-        
+
         // deploy manager with scriptOwner as owner
         manager = new UniswapV4FluxManager(
             UniswapV4FluxManager.ConstructorArgs({

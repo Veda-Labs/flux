@@ -244,11 +244,7 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
             ethAmount / 2
         );
         uint256 liquidity2 = LiquidityAmounts.getLiquidityForAmounts(
-            sqrtPriceX96,
-            TickMath.getSqrtRatioAtTick(tickLower),
-            TickMath.getSqrtRatioAtTick(197130),
-            0,
-            ethAmount / 2
+            sqrtPriceX96, TickMath.getSqrtRatioAtTick(tickLower), TickMath.getSqrtRatioAtTick(197130), 0, ethAmount / 2
         );
         console.log("liquidity2", liquidity2);
         uint256 liquidity3 = LiquidityAmounts.getLiquidityForAmounts(

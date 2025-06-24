@@ -520,14 +520,12 @@ contract UniswapV4FluxManager is FluxManager {
             boringVault.manage(address(token1), approveCalldata, 0);
         }
 
-        uint256 token0Starting =
-            token0IsNative ? address(boringVault).balance : token0.balanceOf(address(boringVault));
+        uint256 token0Starting = token0IsNative ? address(boringVault).balance : token0.balanceOf(address(boringVault));
         uint256 token1Starting = token1.balanceOf(address(boringVault));
 
         boringVault.manage(aggregator, swapData, token0Or1 && token0IsNative ? amount : 0);
 
-        uint256 token0Ending =
-            token0IsNative ? address(boringVault).balance : token0.balanceOf(address(boringVault));
+        uint256 token0Ending = token0IsNative ? address(boringVault).balance : token0.balanceOf(address(boringVault));
         uint256 token1Ending = token1.balanceOf(address(boringVault));
 
         // no need to check that entire approval was used as we revert if the input token balance is not decremented by amount.
