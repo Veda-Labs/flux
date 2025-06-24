@@ -332,7 +332,6 @@ contract UniswapV4FluxManagerTest is Test {
         actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
         manager.rebalance(price, actions);
 
-        deal(address(nativeWrapper), address(boringVault), 1e16);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN0_FOR_TOKEN1_IN_POOL;
         actions[0].data = abi.encode(1e16, 0, block.timestamp, bytes(""));
         manager.rebalance(price, actions);
@@ -379,17 +378,19 @@ contract UniswapV4FluxManagerTest is Test {
             ethAmount,
             usdcAmount
         );
-
+        
+        console.log("\nMINT: ");
         UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.MINT;
         actions[0].data = abi.encode(tickLower, tickUpper, liquidity, ethAmount, usdcAmount, block.timestamp);
         manager.rebalance(price, actions);
 
-        deal(address(token1), address(boringVault), 1000e6);
+        console.log("\nSWAP: ");
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
         actions[0].data = abi.encode(1000e6, 0, block.timestamp, bytes(""));
         manager.rebalance(price, actions);
 
+        console.log("\nCOLLECT FEES: ");
         actions = new UniswapV4FluxManager.Action[](1);
         actions[0].kind = UniswapV4FluxManager.ActionKind.COLLECT_FEES;
         actions[0].data = abi.encode(manager.trackedPositions(0), block.timestamp);
@@ -402,7 +403,6 @@ contract UniswapV4FluxManagerTest is Test {
         uint256 expectedFeePayout = expectedFeeToVaultInWETH * manager.performanceFee() / 1e4;
         console.log("expectedFeePayout", expectedFeePayout);
 
-        deal(address(nativeWrapper), address(boringVault), 1e16);
         manager.claimFees();
 
         console.log("actualFeePayout", ERC20(nativeWrapper).balanceOf(payout));

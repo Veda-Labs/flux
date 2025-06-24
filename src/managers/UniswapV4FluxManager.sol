@@ -16,8 +16,6 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 
-import {console} from "@forge-std/Test.sol";
-
 contract UniswapV4FluxManager is FluxManager {
     using FixedPointMathLib for uint256;
 
