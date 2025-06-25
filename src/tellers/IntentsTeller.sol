@@ -31,27 +31,32 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     }
 
     /**
-     * @notice Data structure for deposit and withdrawal actions
-     * @param isWithdrawal Whether this is a withdrawal action (true) or deposit action (false)
+     * @notice Data structure containing all necessary information for executing deposit and withdrawal actions
+     * @param intent The user's intent containing asset, action type, amounts, and deadline
      * @param user The address of the user performing the action
-     * @param to The recipient address for the action
-     * @param asset The ERC20 token being deposited or withdrawn
-     * @param amountIn The amount of shares/tokens being deposited or withdrawn
-     * @param minimumOut The minimum amount of shares/tokens expected from the action
-     * @param rate The exchange rate to use for the action, not included in the signed message
-     * @param deadline The timestamp after which this action is no longer valid
-     * @param sig The signature authorizing this action
+     * @param rate The exchange rate to use for the action, specified by executor at execution time
+     * @param sig The ECDSA signature authorizing this action, signed by the user
      */
     struct ActionData {
-        bool isWithdrawal;
+        Intent intent;
         address user;
-        address to;
+        uint256 rate;
+        bytes sig;
+    }
+    /**
+     * @notice Data structure for user intents
+     * @param asset The ERC20 token being deposited or withdrawn
+     * @param isWithdrawal Whether this is a withdrawal action (true) or deposit action (false)
+     * @param amountIn The amount of shares/tokens being deposited or withdrawn
+     * @param minimumOut The minimum amount of shares/tokens expected from the action
+     * @param deadline The timestamp after which this action is no longer valid
+     */
+    struct Intent {
         ERC20 asset;
+        bool isWithdrawal;
         uint256 amountIn;
         uint256 minimumOut;
-        uint256 rate;
         uint256 deadline;
-        bytes sig;
     }
 
     /**
@@ -81,6 +86,10 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      * @dev 1,000 or 10%
      */
     uint16 internal constant MAX_SHARE_PREMIUM = 1_000;
+    /**
+     * @notice The typehash for the intent struct.
+     */
+    bytes32 public constant INTENT_TYPEHASH = keccak256("Intent(address asset,bool isWithdrawal,uint256 amountIn,uint256 minimumOut,uint256 deadline)");
 
     // ========================================= STATE =========================================
 
@@ -209,6 +218,16 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      */
     ERC20 public immutable token1;
 
+    /**
+     * @notice The native wrapper associated with fluxManager
+     */
+    address public immutable nativeWrapper;
+
+    /**
+     * @notice Whether the native wrapper is used for token0
+     */
+    bool public immutable token0IsNative;
+
     constructor(
         address _owner,
         address _vault,
@@ -222,6 +241,8 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         fluxManager = FluxManager(_fluxManager);
         token0 = fluxManager.token0();
         token1 = fluxManager.token1();
+        nativeWrapper = fluxManager.nativeWrapper();
+        token0IsNative = fluxManager.token0IsNative();
         maxDeadlinePeriod = uint64(_maxDeadlinePeriod);
         permissionedTransfers = false;
     }
@@ -258,7 +279,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         if (sharePremium > MAX_SHARE_PREMIUM) {
             revert IntentsTeller__SharePremiumTooLarge();
         }
-        if (asset != token0 && asset != token1) {
+        if (asset != (token0IsNative ? ERC20(nativeWrapper) : token0) && asset != token1) {
             revert IntentsTeller__OnlyPoolTokens();
         }
         assetData[asset] = Asset(allowDeposits, allowWithdraws, sharePremium);
@@ -473,6 +494,8 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
     {
         if (isPaused) revert IntentsTeller__Paused();
 
+        if (depositData.intent.isWithdrawal) revert IntentsTeller__ActionMismatch();
+
         shares = _erc20Deposit(depositData, enforceShareLock);
     }
 
@@ -483,6 +506,8 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      */
     function withdraw(ActionData calldata withdrawData) external requiresAuth returns (uint256 assetsOut) {
         if (isPaused) revert IntentsTeller__Paused();
+
+        if (!withdrawData.intent.isWithdrawal) revert IntentsTeller__ActionMismatch();
 
         assetsOut = _erc20Withdraw(withdrawData);
     }
@@ -495,7 +520,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         if (isPaused) revert IntentsTeller__Paused();
 
         for (uint256 i = 0; i < actionData.length; i++) {
-            if (actionData[i].isWithdrawal) {
+            if (actionData[i].intent.isWithdrawal) {
                 _erc20Withdraw(actionData[i]);
             } else {
                 _erc20Deposit(actionData[i], enforceShareLock[i]);
@@ -514,7 +539,7 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         if (actionData.user != msg.sender) {
             revert IntentsTeller__InvalidSignature();
         }
-        _verifySignedMessage(actionData);
+        _verifySignedMessage(actionData.intent, actionData.user, actionData.sig);
     }
 
     // ========================================= INTERNAL HELPER FUNCTIONS =========================================
@@ -523,55 +548,59 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
      * @notice Implements a common ERC20 deposit into BoringVault.
      */
     function _erc20Deposit(ActionData calldata depositData, bool enforceShareLock) internal returns (uint256 shares) {
-        if (depositData.amountIn == 0) {
+        if (depositData.intent.amountIn == 0) {
             revert IntentsTeller__ZeroAssets();
         }
 
-        _verifySignedMessage(depositData);
+        _verifySignedMessage(depositData.intent, depositData.user, depositData.sig);
 
-        fluxManager.refreshInternalFluxAccounting();
-
-        shares = depositData.amountIn.mulDivDown(
-            ONE_SHARE, fluxManager.getRateSafe(depositData.rate, depositData.asset == token0)
+        shares = depositData.intent.amountIn.mulDivDown(
+            ONE_SHARE,
+            fluxManager.getRateSafe(
+                depositData.rate,
+                (depositData.intent.asset == token0 || token0IsNative && depositData.intent.asset == ERC20(nativeWrapper))
+            )
         );
 
-        Asset memory asset = _beforeDeposit(depositData.asset);
+        Asset memory asset = _beforeDeposit(depositData.intent.asset);
         shares = asset.sharePremium > 0 ? shares.mulDivDown(1e4 - asset.sharePremium, 1e4) : shares;
-        if (shares < depositData.minimumOut) {
+        if (shares < depositData.intent.minimumOut) {
             revert IntentsTeller__MinimumMintNotMet();
         }
 
-        vault.enter(depositData.user, depositData.asset, depositData.amountIn, depositData.to, shares);
+        vault.enter(depositData.user, depositData.intent.asset, depositData.intent.amountIn, depositData.user, shares);
 
         if (enforceShareLock) {
-            _afterPublicDeposit(depositData.user, depositData.asset, depositData.amountIn, shares, shareLockPeriod);
+            _afterPublicDeposit(depositData.user, depositData.intent.asset, depositData.intent.amountIn, shares, shareLockPeriod);
         } else {
-            emit BulkDeposit(address(depositData.asset), depositData.amountIn);
+            emit BulkDeposit(address(depositData.intent.asset), depositData.intent.amountIn);
         }
     }
 
     function _erc20Withdraw(ActionData calldata withdrawData) internal returns (uint256 assetsOut) {
-        Asset memory asset = assetData[withdrawData.asset];
+        Asset memory asset = assetData[withdrawData.intent.asset];
         if (!asset.allowWithdraws) {
             revert IntentsTeller__AssetNotSupported();
         }
 
-        if (withdrawData.amountIn == 0) revert IntentsTeller__ZeroShares();
+        if (withdrawData.intent.amountIn == 0) revert IntentsTeller__ZeroShares();
 
-        _verifySignedMessage(withdrawData);
+        _verifySignedMessage(withdrawData.intent, withdrawData.user, withdrawData.sig);
 
-        fluxManager.refreshInternalFluxAccounting();
-
-        assetsOut = withdrawData.amountIn.mulDivDown(
-            fluxManager.getRateSafe(withdrawData.rate, withdrawData.asset == token0), ONE_SHARE
+        assetsOut = withdrawData.intent.amountIn.mulDivDown(
+            fluxManager.getRateSafe(
+                withdrawData.rate,
+                (withdrawData.intent.asset == token0 || token0IsNative && withdrawData.intent.asset == ERC20(nativeWrapper))
+            ),
+            ONE_SHARE
         );
 
-        if (assetsOut < withdrawData.minimumOut) {
+        if (assetsOut < withdrawData.intent.minimumOut) {
             revert IntentsTeller__MinimumAssetsNotMet();
         }
 
-        vault.exit(withdrawData.to, withdrawData.asset, assetsOut, withdrawData.user, withdrawData.amountIn);
-        emit Withdraw(address(withdrawData.asset), withdrawData.amountIn);
+        vault.exit(withdrawData.user, withdrawData.intent.asset, assetsOut, withdrawData.user, withdrawData.intent.amountIn);
+        emit Withdraw(address(withdrawData.intent.asset), withdrawData.intent.amountIn);
     }
 
     /**
@@ -606,32 +635,31 @@ contract IntentsTeller is Auth, BeforeTransferHook, ReentrancyGuard, IPausable, 
         emit Deposit(nonce, user, address(depositAsset), depositAmount, shares, block.timestamp, currentShareLockPeriod);
     }
 
-    function _verifySignedMessage(ActionData calldata actionData) internal {
+    function _verifySignedMessage(Intent memory intent, address user, bytes memory sig) internal {
         // Recreate the signed message and verify the signature
         // Signature does not include rate as rate is specified by executor at execution time
         bytes32 digest = _hashTypedDataV4(
             keccak256(
                 abi.encode(
-                    address(this), // teller
-                    actionData.to, // receiver
-                    actionData.asset, // asset
-                    actionData.isWithdrawal, // type
-                    actionData.amountIn, // amount
-                    actionData.minimumOut, // minimumOut
-                    actionData.deadline // deadline
+                    INTENT_TYPEHASH,
+                    intent.asset,
+                    intent.isWithdrawal,
+                    intent.amountIn,
+                    intent.minimumOut,
+                    intent.deadline
                 )
             )
         );
 
-        address signer = ECDSA.recover(digest, actionData.sig);
+        address signer = ECDSA.recover(digest, sig);
 
-        if (signer != actionData.user) {
+        if (signer != user) {
             revert IntentsTeller__InvalidSignature();
         }
-        if (block.timestamp > actionData.deadline) {
+        if (block.timestamp > intent.deadline) {
             revert IntentsTeller__SignatureExpired();
         }
-        if (actionData.deadline > block.timestamp + maxDeadlinePeriod) {
+        if (intent.deadline > block.timestamp + maxDeadlinePeriod) {
             revert IntentsTeller__DeadlineOutsideMaxPeriod();
         }
         if (usedSignatures[digest]) {

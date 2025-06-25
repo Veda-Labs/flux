@@ -40,11 +40,8 @@ abstract contract FluxManager is Auth {
     uint16 public datumUpperBound;
 
     uint16 public performanceFee;
-    uint64 public lastPerformanceReview;
-    uint64 public performanceReviewFrequency;
     address public payout;
     uint128 public pendingFee;
-    uint128 totalSupplyLastReview;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         ERRORS                             */
@@ -80,14 +77,15 @@ abstract contract FluxManager is Auth {
     /*                       IMMUTABLES                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    BoringVault internal immutable boringVault;
+    BoringVault public immutable boringVault;
     ERC20 public immutable token0;
     ERC20 public immutable token1;
     uint8 internal immutable decimals0;
     uint8 internal immutable decimals1;
     uint8 internal immutable decimalsBoring;
-    bool internal immutable baseIn0Or1; // Only used for initial share price when zero shares outstanding, and for totalAssets check
-    address internal immutable nativeWrapper;
+    bool public immutable baseIn0Or1; // Only used for initial share price when zero shares outstanding, and for totalAssets check
+    bool public immutable token0IsNative;
+    address public immutable nativeWrapper;
 
     constructor(
         address _owner,
@@ -107,6 +105,7 @@ abstract contract FluxManager is Auth {
         decimals1 = token1.decimals();
         decimalsBoring = boringVault.decimals();
         baseIn0Or1 = _baseIn0Or1;
+        token0IsNative = _token0 == address(0);
         nativeWrapper = _nativeWrapper;
         datum = IDatum(_datum);
 
@@ -136,8 +135,8 @@ abstract contract FluxManager is Auth {
         emit Unpaused();
     }
 
-    function claimFees(bool token0Or1) external requiresAuth {
-        _claimFees(token0Or1);
+    function claimFees() external requiresAuth {
+        _claimFees();
     }
 
     function setPayout(address newPayout) external requiresAuth {
@@ -163,14 +162,6 @@ abstract contract FluxManager is Auth {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                    FLUX ACCOUNTING                         */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    function refreshInternalFluxAccounting() external requiresAuth {
-        _refreshInternalFluxAccounting();
-    }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       FLUX VIEW                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -184,15 +175,11 @@ abstract contract FluxManager is Auth {
         (uint256 token0Assets, uint256 token1Assets) = _totalAssets(exchangeRate);
         if (quoteIn0Or1) {
             // Return totalAssets in token0
-            uint256 converted = token1Assets * (10 ** decimals0);
-            converted = converted.mulDivDown(10 ** decimals1, exchangeRate);
-            converted /= 10 ** decimals1;
+            uint256 converted = token1Assets.mulDivDown(10 ** decimals0, exchangeRate);
             assets = token0Assets + converted;
         } else {
             // Return totalAssets in token1
-            uint256 converted = token0Assets * (10 ** decimals1);
-            converted = converted.mulDivDown(exchangeRate, 10 ** decimals1);
-            converted /= 10 ** decimals0;
+            uint256 converted = token0Assets.mulDivDown(exchangeRate, 10 ** decimals0);
             assets = token1Assets + converted;
         }
     }
@@ -214,7 +201,7 @@ abstract contract FluxManager is Auth {
             } else if (!baseIn0Or1 && quoteIn0Or1) {
                 return uint256(10 ** decimals0).mulDivDown(10 ** decimals1, exchangeRate);
             } else if (baseIn0Or1 && !quoteIn0Or1) {
-                return uint256(10 ** decimals1).mulDivDown(exchangeRate, 10 ** decimals1);
+                return exchangeRate;
             } else if (!baseIn0Or1 && !quoteIn0Or1) {
                 return 10 ** decimals1;
             } else {
@@ -236,27 +223,18 @@ abstract contract FluxManager is Auth {
     /*                     FLUX INTERNAL                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function _claimFees(bool token0Or1) internal {
+    function _claimFees() internal {
         uint256 pending = pendingFee;
         if (pending > 0) {
-            address token = token0Or1 ? address(token0) : address(token1);
+            address token = baseIn0Or1 ? (token0IsNative ? address(nativeWrapper) : address(token0)) : address(token1);
             pendingFee = 0;
-            if (address(token) == address(0)) {
-                // Transfer it.
-                boringVault.manage(nativeWrapper, abi.encodeWithSelector(ERC20.transfer.selector, payout, pending), 0);
-            } else {
-                // Transfer it.
-                boringVault.manage(token, abi.encodeWithSelector(ERC20.transfer.selector, payout, pending), 0);
-            }
+            boringVault.manage(token, abi.encodeWithSelector(ERC20.transfer.selector, payout, pending), 0);
         }
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                   ABSTRACT FUNCTIONS                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @notice Refresh internal flux constants(like ERC20 token balances)
-    function _refreshInternalFluxAccounting() internal virtual;
 
     function _totalAssets(uint256 exchangeRate)
         internal
