@@ -53,6 +53,8 @@ contract IntentsTellerTest is Test {
 
     address internal payout = vm.addr(1);
 
+    bytes32 internal INTENT_TYPEHASH;
+
     function setUp() external {
         // Setup forked environment.
         string memory rpcKey = "MAINNET_RPC_URL";
@@ -129,6 +131,8 @@ contract IntentsTellerTest is Test {
         // Set up test user.
         (testUser0, testUser0Pk) = makeAddrAndKey("testUser0");
         (testUser1, testUser1Pk) = makeAddrAndKey("testUser1");
+
+        INTENT_TYPEHASH = intentsTeller.INTENT_TYPEHASH();
     }
 
     function testDepositSimple() external {
@@ -144,17 +148,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             false
@@ -176,17 +187,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -197,17 +215,24 @@ contract IntentsTellerTest is Test {
         // Withdraw using executor
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: true,
+                    amountIn: amount / 2,
+                    minimumOut: 1,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount / 2,
-                minimumOut: 1,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), true, amount / 2, 1, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true,
+                        amountIn: amount / 2,
+                        minimumOut: 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -223,17 +248,26 @@ contract IntentsTellerTest is Test {
         deal(address(token1), testUser0, amount);
 
         bytes memory depositSig = _generateSignature(
-            SigData(testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days)
+            IntentsTeller.Intent({
+                asset: token1,
+                isWithdrawal: false,
+                amountIn: amount,
+                minimumOut: 0,
+                deadline: block.timestamp + 1 days
+            }),
+            testUser0Pk
         );
 
         IntentsTeller.ActionData memory depositData = IntentsTeller.ActionData({
-            isWithdrawal: false,
+            intent: IntentsTeller.Intent({
+                asset: token1,
+                isWithdrawal: false,
+                amountIn: amount,
+                minimumOut: 0,
+                deadline: block.timestamp + 1 days
+            }),
             user: testUser0,
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
             rate: 1589835727,
-            deadline: block.timestamp + 1 days,
             sig: depositSig
         });
 
@@ -266,17 +300,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__Paused.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             false
@@ -287,17 +328,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -315,17 +363,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__Paused.selector));
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: true,
+                    amountIn: amount / 2,
+                    minimumOut: 1,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount / 2,
-                minimumOut: 1,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), true, amount / 2, 1, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true,
+                        amountIn: amount / 2,
+                        minimumOut: 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -336,17 +391,24 @@ contract IntentsTellerTest is Test {
         // Withdraw using executor
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: true,
+                    amountIn: amount / 2,
+                    minimumOut: 1,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount / 2,
-                minimumOut: 1,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), true, amount / 2, 1, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true,
+                        amountIn: amount / 2,
+                        minimumOut: 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -369,17 +431,24 @@ contract IntentsTellerTest is Test {
 
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             false
@@ -470,17 +539,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -512,17 +588,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -550,17 +633,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token0,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 1,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token0,
-                amountIn: amount,
-                minimumOut: 1,
                 rate: 1589835727, // USDC per ETH
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token0), false, amount, 1, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token0,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -572,17 +662,24 @@ contract IntentsTellerTest is Test {
         // Now Withdraw
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token0,
+                    isWithdrawal: true,
+                    amountIn: 1589835727,
+                    minimumOut: 1,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token0,
-                amountIn: 1589835727,
-                minimumOut: 1,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token0), true, 1589835727, 1, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token0,
+                        isWithdrawal: true,
+                        amountIn: 1589835727,
+                        minimumOut: 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -604,17 +701,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -632,17 +736,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token0,
+                    isWithdrawal: false,
+                    amountIn: amount1,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser1,
-                asset: token0,
-                amountIn: amount1,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser1Pk, address(intentsTeller), address(token0), false, amount1, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token0,
+                        isWithdrawal: false,
+                        amountIn: amount1,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser1Pk
                 )
             }),
             true
@@ -654,15 +765,24 @@ contract IntentsTellerTest is Test {
         // Now Withdraw token1 with user 0
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: true,
+                    amountIn: amount,
+                    minimumOut: 1,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 1,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(testUser0Pk, address(intentsTeller), address(token1), true, amount, 1, block.timestamp + 1 days)
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true,
+                        amountIn: amount,
+                        minimumOut: 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -672,17 +792,24 @@ contract IntentsTellerTest is Test {
         // Now Withdraw token0 with user 1
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token0,
+                    isWithdrawal: true,
+                    amountIn: 1589835727,
+                    minimumOut: 1,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser1,
-                asset: token0,
-                amountIn: 1589835727,
-                minimumOut: 1,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser1Pk, address(intentsTeller), address(token0), true, 1589835727, 1, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token0,
+                        isWithdrawal: true,
+                        amountIn: 1589835727,
+                        minimumOut: 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser1Pk
                 )
             })
         );
@@ -703,34 +830,52 @@ contract IntentsTellerTest is Test {
 
         // Generate signature for user 0 to deposit 1e10 USDC to user 0
         bytes memory depositSig = _generateSignature(
-            SigData(testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days)
+            IntentsTeller.Intent({
+                asset: token1,
+                isWithdrawal: false,
+                amountIn: amount,
+                minimumOut: 0,
+                deadline: block.timestamp + 1 days
+            }),
+            testUser0Pk
         );
 
         // Generate signature for user 0 to withdraw 5e9 USDC to user 0
         bytes memory withdrawSig = _generateSignature(
-            SigData(testUser0Pk, address(intentsTeller), address(token1), true, amount / 2, 0, block.timestamp + 1 days)
+            IntentsTeller.Intent({
+                asset: token1,
+                isWithdrawal: true,
+                amountIn: amount / 2,
+                minimumOut: 0,
+                deadline: block.timestamp + 1 days
+            }),
+            testUser0Pk
         );
 
         // Generate Array of actions
         IntentsTeller.ActionData[] memory actions = new IntentsTeller.ActionData[](2);
         actions[0] = IntentsTeller.ActionData({
-            isWithdrawal: false,
+            intent: IntentsTeller.Intent({
+                asset: token1,
+                isWithdrawal: false,
+                amountIn: amount,
+                minimumOut: 0,
+                deadline: block.timestamp + 1 days
+            }),
             user: testUser0,
-            asset: token1,
-            amountIn: amount,
-            minimumOut: 0,
             rate: 1589835727,
-            deadline: block.timestamp + 1 days,
             sig: depositSig
         });
         actions[1] = IntentsTeller.ActionData({
-            isWithdrawal: true,
+            intent: IntentsTeller.Intent({
+                asset: token1,
+                isWithdrawal: true,
+                amountIn: amount / 2,
+                minimumOut: 0,
+                deadline: block.timestamp + 1 days
+            }),
             user: testUser0,
-            asset: token1,
-            amountIn: amount / 2,
-            minimumOut: 0,
             rate: 1589835727,
-            deadline: block.timestamp + 1 days,
             sig: withdrawSig
         });
 
@@ -762,17 +907,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ActionMismatch.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: true, // This causes the expected failure
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: true, // This causes the expected failure
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -793,23 +945,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true, // This causes the expected failure
-                        amount,
-                        0,
-                        block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true, // This causes the expected failure
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -830,15 +983,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount / 2 + 1, // This causes the expected failure
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount / 2, // This causes the expected failure
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(testUser0Pk, address(intentsTeller), address(token1), true, amount, 0, block.timestamp + 1 days)
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount / 2,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -859,17 +1021,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser1, // This causes the failure
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -891,17 +1060,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__InvalidSignature.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token0), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token0,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -922,15 +1098,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__SignatureExpired.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp - 1 // This causes the expected failure
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp - 1, // This causes the expected failure
                 sig: _generateSignature(
-                    SigData(testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp - 1)
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp - 1
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -951,17 +1136,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__DeadlineOutsideMaxPeriod.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 7 days + 1 // This causes the expected failure
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 7 days + 1, // This causes the expected failure
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 7 days + 1
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 7 days + 1
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -982,23 +1174,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__MinimumMintNotMet.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 1e10 + 1, // This causes the expected failure
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 1e10 + 1, // This causes the expected failure
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        false,
-                        amount,
-                        1e10 + 1,
-                        block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 1e10 + 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -1018,17 +1211,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -1038,23 +1238,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__MinimumAssetsNotMet.selector));
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: true,
+                    amountIn: amount / 2,
+                    minimumOut: 1e10 + 1, // This causes the expected failure
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount / 2,
-                minimumOut: 1e10 + 1, // This causes the expected failure
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        address(token1),
-                        true,
-                        amount / 2,
-                        1e10 + 1,
-                        block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true,
+                        amountIn: amount / 2,
+                        minimumOut: 1e10 + 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -1078,17 +1279,24 @@ contract IntentsTellerTest is Test {
         );
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 1e10,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 1e10,
                 rate: 1595713474, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 1e10, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 1e10,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -1102,17 +1310,24 @@ contract IntentsTellerTest is Test {
         );
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 1e10,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 1e10,
                 rate: 1579835726, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 1e10, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 1e10,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -1132,17 +1347,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor with good rate
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 1e10,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 1e10,
                 rate: 1593713474, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 1e10, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 1e10,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -1156,17 +1378,24 @@ contract IntentsTellerTest is Test {
         );
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: true,
+                    amountIn: amount,
+                    minimumOut: 1e10,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 1e10,
                 rate: 1595713474, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), true, amount, 1e10, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true,
+                        amountIn: amount,
+                        minimumOut: 1e10,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -1179,17 +1408,24 @@ contract IntentsTellerTest is Test {
         );
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: true,
+                    amountIn: amount,
+                    minimumOut: 1e10,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 1e10,
                 rate: 1579835726, // This causes the expected failure (1579835727 to 1595713473 are valid rates)
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), true, amount, 1e10, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true,
+                        amountIn: amount,
+                        minimumOut: 1e10,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -1209,15 +1445,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ZeroAssets.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: 0, // This causes the expected failure
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: 0, // This causes the expected failure
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(testUser0Pk, address(intentsTeller), address(token1), false, 0, 0, block.timestamp + 1 days)
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: 0,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             false
@@ -1237,17 +1482,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -1257,15 +1509,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__ZeroShares.selector));
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: true,
+                    amountIn: 0, // This causes the expected failure
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: 0, // This causes the expected failure
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(testUser0Pk, address(intentsTeller), address(token1), true, 0, 0, block.timestamp + 1 days)
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: true,
+                        amountIn: 0,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -1279,23 +1540,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__AssetNotSupported.selector));
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7), // This causes the expected failure
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7), // This causes the expected failure
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        0xdAC17F958D2ee523a2206206994597C13D831ec7,
-                        false,
-                        amount,
-                        0,
-                        block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7),
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             false
@@ -1315,17 +1577,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             false
@@ -1335,23 +1604,24 @@ contract IntentsTellerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IntentsTeller.IntentsTeller__AssetNotSupported.selector));
         intentsTeller.withdraw(
             IntentsTeller.ActionData({
-                isWithdrawal: true,
+                intent: IntentsTeller.Intent({
+                    asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7), // This causes the expected failure
+                    isWithdrawal: true,
+                    amountIn: amount,
+                    minimumOut: 1,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7), // This causes the expected failure
-                amountIn: amount,
-                minimumOut: 1,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk,
-                        address(intentsTeller),
-                        0xdAC17F958D2ee523a2206206994597C13D831ec7,
-                        false,
-                        amount,
-                        1,
-                        block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7),
+                        isWithdrawal: true,
+                        amountIn: amount,
+                        minimumOut: 1,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             })
         );
@@ -1372,17 +1642,24 @@ contract IntentsTellerTest is Test {
         // Deposit using executor
         intentsTeller.deposit(
             IntentsTeller.ActionData({
-                isWithdrawal: false,
+                intent: IntentsTeller.Intent({
+                    asset: token1,
+                    isWithdrawal: false,
+                    amountIn: amount,
+                    minimumOut: 0,
+                    deadline: block.timestamp + 1 days
+                }),
                 user: testUser0,
-                asset: token1,
-                amountIn: amount,
-                minimumOut: 0,
                 rate: 1589835727,
-                deadline: block.timestamp + 1 days,
                 sig: _generateSignature(
-                    SigData(
-                        testUser0Pk, address(intentsTeller), address(token1), false, amount, 0, block.timestamp + 1 days
-                    )
+                    IntentsTeller.Intent({
+                        asset: token1,
+                        isWithdrawal: false,
+                        amountIn: amount,
+                        minimumOut: 0,
+                        deadline: block.timestamp + 1 days
+                    }),
+                    testUser0Pk
                 )
             }),
             true
@@ -1409,32 +1686,40 @@ contract IntentsTellerTest is Test {
         vm.selectFork(forkId);
     }
 
-    function _generateSignature(SigData memory sigData) internal view returns (bytes memory sig) {
-        bytes32 TYPE_HASH =
-            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
-        // Get the domain separator from the contract
-        bytes32 domainSeparator = keccak256(
+    function _generateSignature(IntentsTeller.Intent memory intent, uint256 pK) internal view returns (bytes memory sig) {
+        // Create the domain separator that matches the contract's EIP712 constructor
+        bytes32 DOMAIN_SEPARATOR = keccak256(
             abi.encode(
-                TYPE_HASH,
-                keccak256(bytes("Intents Teller")),
-                keccak256(bytes("2")),
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("Intents Teller")), // name from constructor
+                keccak256(bytes("2")), // version from constructor
                 block.chainid,
                 address(intentsTeller)
             )
         );
 
-        bytes32 hash = keccak256(
+        // Create the Intent struct hash according to EIP-712
+        bytes32 intentHash = keccak256(
             abi.encode(
-                sigData.teller,
-                sigData.asset,
-                sigData.isWithdrawal,
-                sigData.amountIn,
-                sigData.minimumOut,
-                sigData.deadline
+                INTENT_TYPEHASH,
+                intent.asset,
+                intent.isWithdrawal,
+                intent.amountIn,
+                intent.minimumOut,
+                intent.deadline
             )
         );
-        bytes32 digest = MessageHashUtils.toTypedDataHash(domainSeparator, hash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(sigData.pK, digest);
+        
+        // Combine domain separator and struct hash according to EIP-712
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR,
+                intentHash
+            )
+        );
+        
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pK, digest);
         sig = abi.encodePacked(r, s, v);
     }
 

@@ -310,9 +310,9 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
 
         UniswapV4FluxManager.Action[] memory actions = new UniswapV4FluxManager.Action[](2);
         actions[0].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN0_FOR_TOKEN1_IN_POOL;
-        actions[0].data = abi.encode(ethAmount / 2, 0, block.timestamp, bytes(""));
+        actions[0].data = abi.encode(usdcAmount / 2, 0, block.timestamp, bytes(""));
         actions[1].kind = UniswapV4FluxManager.ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL;
-        actions[1].data = abi.encode(usdcAmount / 2, 0, block.timestamp, bytes(""));
+        actions[1].data = abi.encode(ethAmount / 2, 0, block.timestamp, bytes(""));
         // reverts because Sorella hook locks the pool when the swap does not have the special unlock data provided by their off chain system
         // for the swap via their on chain executor
         vm.expectRevert(
@@ -379,8 +379,6 @@ contract UniswapV4FluxManagerTestSorellaMainnet is Test {
         );
         manager.rebalance(price, actions);
     }
-
-    // TODO test accounting with multiple different positions.
 
     function testGetRate() external view {
         uint256 exchangeRate = 0.00037878787e18;
