@@ -16,8 +16,6 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 
-import {console} from "@forge-std/Test.sol";
-
 contract UniswapV4FluxManager is FluxManager {
     using FixedPointMathLib for uint256;
 
@@ -52,7 +50,7 @@ contract UniswapV4FluxManager is FluxManager {
     }
 
     struct PositionData {
-        uint128 liquidity;
+        uint256 liquidity;
         int24 tickLower;
         int24 tickUpper;
     }
@@ -94,9 +92,6 @@ contract UniswapV4FluxManager is FluxManager {
     uint16 public rebalanceDeviationMin;
     uint16 public rebalanceDeviationMax;
     mapping(address => bool) internal aggregators;
-
-    uint128 internal token0Balance;
-    uint128 internal token1Balance;
 
     uint256[] public trackedPositions;
 
@@ -176,15 +171,6 @@ contract UniswapV4FluxManager is FluxManager {
     /*                     FLUX FUNCTIONS                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Refresh internal flux constants.
-    /// @dev For Uniswap V4 this is token0 and token1 contract balances
-    function _refreshInternalFluxAccounting() internal override {
-        token0Balance = address(token0) == address(0)
-            ? SafeCast.toUint128(ERC20(nativeWrapper).balanceOf(address(boringVault)))
-            : SafeCast.toUint128(token0.balanceOf(address(boringVault)));
-        token1Balance = SafeCast.toUint128(token1.balanceOf(address(boringVault)));
-    }
-
     /// @notice exchangeRate must be given in terms of token1 decimals, and it should be the amount of token1 per token0
     function _totalAssets(uint256 exchangeRate)
         internal
@@ -192,8 +178,10 @@ contract UniswapV4FluxManager is FluxManager {
         override
         returns (uint256 token0Assets, uint256 token1Assets)
     {
-        token0Assets = token0Balance;
-        token1Assets = token1Balance;
+        token0Assets = token0IsNative
+            ? SafeCast.toUint128(ERC20(nativeWrapper).balanceOf(address(boringVault)) + address(boringVault).balance)
+            : SafeCast.toUint128(token0.balanceOf(address(boringVault)));
+        token1Assets = SafeCast.toUint128(token1.balanceOf(address(boringVault)));
 
         // Calculate the current sqrtPrice.
         uint256 ratioX192 = FullMath.mulDiv(exchangeRate, 2 ** 192, 10 ** decimals0);
@@ -207,7 +195,7 @@ contract UniswapV4FluxManager is FluxManager {
                 sqrtPriceX96,
                 TickMath.getSqrtRatioAtTick(data.tickLower),
                 TickMath.getSqrtRatioAtTick(data.tickUpper),
-                data.liquidity
+                uint128(data.liquidity)
             );
             token0Assets += amount0;
             token1Assets += amount1;
@@ -223,8 +211,7 @@ contract UniswapV4FluxManager is FluxManager {
         checkDatum(exchangeRate)
         requiresAuth
     {
-        _refreshInternalFluxAccounting();
-        if (address(token0) == address(0)) {
+        if (token0IsNative) {
             _unwrapAllNative();
         }
         uint256 totalSupplyBefore = boringVault.totalSupply();
@@ -253,23 +240,23 @@ contract UniswapV4FluxManager is FluxManager {
                 (
                     int24 tickLower,
                     int24 tickUpper,
-                    uint128 liquidity,
-                    uint256 amount0Max,
-                    uint256 amount1Max,
+                    uint256 liquidity,
+                    uint128 amount0Max,
+                    uint128 amount1Max,
                     uint256 deadline
-                ) = abi.decode(action.data, (int24, int24, uint128, uint256, uint256, uint256));
+                ) = abi.decode(action.data, (int24, int24, uint256, uint128, uint128, uint256));
                 _mint(tickLower, tickUpper, liquidity, amount0Max, amount1Max, deadline);
             } else if (action.kind == ActionKind.BURN) {
-                (uint256 positionId, uint256 amount0Min, uint256 amount1Min, uint256 deadline) =
-                    abi.decode(action.data, (uint256, uint256, uint256, uint256));
+                (uint256 positionId, uint128 amount0Min, uint128 amount1Min, uint256 deadline) =
+                    abi.decode(action.data, (uint256, uint128, uint128, uint256));
                 _burn(positionId, amount0Min, amount1Min, deadline);
             } else if (action.kind == ActionKind.INCREASE_LIQUIDITY) {
-                (uint256 positionId, uint128 liquidity, uint256 amount0Max, uint256 amount1Max, uint256 deadline) =
-                    abi.decode(action.data, (uint256, uint128, uint256, uint256, uint256));
+                (uint256 positionId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, uint256 deadline) =
+                    abi.decode(action.data, (uint256, uint256, uint128, uint128, uint256));
                 _increaseLiquidity(positionId, liquidity, amount0Max, amount1Max, deadline);
             } else if (action.kind == ActionKind.DECREASE_LIQUIDITY) {
-                (uint256 positionId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) =
-                    abi.decode(action.data, (uint256, uint128, uint256, uint256, uint256));
+                (uint256 positionId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, uint256 deadline) =
+                    abi.decode(action.data, (uint256, uint256, uint128, uint128, uint256));
                 _decreaseLiquidity(positionId, liquidity, amount0Min, amount1Min, deadline);
             } else if (action.kind == ActionKind.COLLECT_FEES) {
                 (uint256 positionId, uint256 deadline) = abi.decode(action.data, (uint256, uint256));
@@ -281,17 +268,16 @@ contract UniswapV4FluxManager is FluxManager {
             } else if (action.kind == ActionKind.SWAP_TOKEN1_FOR_TOKEN0_IN_POOL) {
                 (uint128 amount1In, uint128 minAmount0Out, uint256 deadline, bytes memory hookData) =
                     abi.decode(action.data, (uint128, uint128, uint256, bytes));
-                _swapToken0ForToken1InPool(amount1In, minAmount0Out, deadline, hookData);
+                _swapToken1ForToken0InPool(amount1In, minAmount0Out, deadline, hookData);
             } else if (action.kind == ActionKind.SWAP_WITH_AGGREGATOR) {
                 (address aggregator, uint256 amount, bool token0Or1, uint256 minAmountOut, bytes memory swapData) =
                     abi.decode(action.data, (address, uint256, bool, uint256, bytes));
                 _swapWithAggregator(aggregator, amount, token0Or1, minAmountOut, swapData);
             }
         }
-        if (address(token0) == address(0)) {
+        if (token0IsNative) {
             _wrapAllNative();
         }
-        _refreshInternalFluxAccounting();
 
         // Make sure totalSupply is constant.
         if (totalSupplyBefore != boringVault.totalSupply()) revert UniswapV4FluxManager__RebalanceChangedTotalSupply();
@@ -352,9 +338,9 @@ contract UniswapV4FluxManager is FluxManager {
     function _mint(
         int24 tickLower,
         int24 tickUpper,
-        uint128 liquidity,
-        uint256 amount0Max,
-        uint256 amount1Max,
+        uint256 liquidity,
+        uint128 amount0Max,
+        uint128 amount1Max,
         uint256 deadline
     ) internal {
         bytes memory actions = abi.encodePacked(
@@ -369,14 +355,14 @@ contract UniswapV4FluxManager is FluxManager {
         params[2] = abi.encode(token0, boringVault);
         params[3] = abi.encode(token1, boringVault);
         uint256 positionId = positionManager.nextTokenId();
-        _modifyLiquidities(actions, params, deadline, address(token0) == address(0) ? amount0Max : 0);
+        _modifyLiquidities(actions, params, deadline, token0IsNative ? amount0Max : 0);
 
         // Track new position.
         trackedPositions.push(positionId);
         trackedPositionData.push(PositionData(liquidity, tickLower, tickUpper));
     }
 
-    function _burn(uint256 positionId, uint256 amount0Min, uint256 amount1Min, uint256 deadline) internal {
+    function _burn(uint256 positionId, uint128 amount0Min, uint128 amount1Min, uint256 deadline) internal {
         // Remove position from tracking if present.
         _removePositionIfPresent(positionId);
 
@@ -390,9 +376,9 @@ contract UniswapV4FluxManager is FluxManager {
 
     function _increaseLiquidity(
         uint256 positionId,
-        uint128 liquidity,
-        uint256 amount0Max,
-        uint256 amount1Max,
+        uint256 liquidity,
+        uint128 amount0Max,
+        uint128 amount1Max,
         uint256 deadline
     ) internal {
         bytes memory actions = abi.encodePacked(
@@ -405,16 +391,16 @@ contract UniswapV4FluxManager is FluxManager {
         params[2] = abi.encode(token0, boringVault);
         params[3] = abi.encode(token1, boringVault);
 
-        _modifyLiquidities(actions, params, deadline, address(token0) == address(0) ? amount0Max : 0);
+        _modifyLiquidities(actions, params, deadline, token0IsNative ? amount0Max : 0);
 
         _incrementLiquidity(positionId, liquidity);
     }
 
     function _decreaseLiquidity(
         uint256 positionId,
-        uint128 liquidity,
-        uint256 amount0Min,
-        uint256 amount1Min,
+        uint256 liquidity,
+        uint128 amount0Min,
+        uint128 amount1Min,
         uint256 deadline
     ) internal {
         bytes memory actions = abi.encodePacked(uint8(Actions.DECREASE_LIQUIDITY), uint8(Actions.TAKE_PAIR));
@@ -473,7 +459,7 @@ contract UniswapV4FluxManager is FluxManager {
         // Execute the swap
         bytes memory swapData = abi.encodeWithSelector(IUniversalRouter.execute.selector, commands, inputs, deadline);
 
-        boringVault.manage(universalRouter, swapData, address(token0) == address(0) ? amount0In : 0);
+        boringVault.manage(universalRouter, swapData, token0IsNative ? amount0In : 0);
     }
 
     function _swapToken1ForToken0InPool(
@@ -534,14 +520,12 @@ contract UniswapV4FluxManager is FluxManager {
             boringVault.manage(address(token1), approveCalldata, 0);
         }
 
-        uint256 token0Starting =
-            address(token0) == address(0) ? address(boringVault).balance : token0.balanceOf(address(boringVault));
+        uint256 token0Starting = token0IsNative ? address(boringVault).balance : token0.balanceOf(address(boringVault));
         uint256 token1Starting = token1.balanceOf(address(boringVault));
 
-        boringVault.manage(aggregator, swapData, token0Or1 && address(token0) == address(0) ? amount : 0);
+        boringVault.manage(aggregator, swapData, token0Or1 && token0IsNative ? amount : 0);
 
-        uint256 token0Ending =
-            address(token0) == address(0) ? address(boringVault).balance : token0.balanceOf(address(boringVault));
+        uint256 token0Ending = token0IsNative ? address(boringVault).balance : token0.balanceOf(address(boringVault));
         uint256 token1Ending = token1.balanceOf(address(boringVault));
 
         // no need to check that entire approval was used as we revert if the input token balance is not decremented by amount.
@@ -586,7 +570,7 @@ contract UniswapV4FluxManager is FluxManager {
         boringVault.manage(address(positionManager), data, value);
     }
 
-    function _incrementLiquidity(uint256 positionId, uint128 liquidity) internal {
+    function _incrementLiquidity(uint256 positionId, uint256 liquidity) internal {
         uint256 positionCount = trackedPositions.length;
         uint256 positionIndex = type(uint256).max;
         for (uint256 i; i < positionCount; ++i) {
@@ -603,7 +587,7 @@ contract UniswapV4FluxManager is FluxManager {
         }
     }
 
-    function _decrementLiquidity(uint256 positionId, uint128 liquidity) internal {
+    function _decrementLiquidity(uint256 positionId, uint256 liquidity) internal {
         uint256 positionCount = trackedPositions.length;
         uint256 positionIndex = type(uint256).max;
         for (uint256 i; i < positionCount; ++i) {
