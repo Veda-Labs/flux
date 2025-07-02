@@ -36,6 +36,8 @@ contract DeploySorellaVaultSimple is Script {
     uint24 internal poolFee = uint24(0x800000);
     int24 internal tickSpacing = int24(10);
 
+    IntentsTeller internal teller;
+
     function run() public {
         vm.startBroadcast();
         /// DEPLOY CONTRACTS
@@ -47,7 +49,7 @@ contract DeploySorellaVaultSimple is Script {
         rolesAuthority = new RolesAuthority(scriptOwner, Authority(address(0)));
 
         // deploy boring vault with scriptOwner as owner
-        boringVault = new BoringVault(scriptOwner, "Test0", "T0", 18);
+        boringVault = new BoringVault(scriptOwner, "Test1", "T1", 18);
 
         // deploy datum
         datum = new ChainlinkDatum(ETH_USD_ORACLE, 1 days, true);
@@ -72,11 +74,24 @@ contract DeploySorellaVaultSimple is Script {
             })
         );
 
+        // deploy teller with scriptOwner as owner
+        teller = new IntentsTeller(
+            scriptOwner,
+            address(boringVault),
+            address(manager),
+            "TestTeller1",
+            "0.1",
+            7 days
+        );
+
         // set roles authority as authority for boring vault
         boringVault.setAuthority(rolesAuthority);
 
         // set roles authority as authority for manager
         manager.setAuthority(rolesAuthority);
+
+        // set roles authority as authority for teller
+        teller.setAuthority(rolesAuthority);
 
         // create role capability for managing the vault
         rolesAuthority.setRoleCapability(
@@ -100,8 +115,66 @@ contract DeploySorellaVaultSimple is Script {
         // set performance fee
         manager.setPerformanceFee(0.2e4);
 
+        
+        // SET UP TELLER
+
+        // add assets to teller
+        teller.updateAssetData(token1, true, true, 0);
+        teller.updateAssetData(token0, true, true, 0);
+
+        // create teller role for enter/exit vault
+        rolesAuthority.setRoleCapability(
+            2,
+            address(boringVault),
+            bytes4(keccak256(abi.encodePacked("enter(address,address,uint256,address,uint256)"))),
+            true
+        );
+        rolesAuthority.setRoleCapability(
+            2,
+            address(boringVault),
+            bytes4(keccak256(abi.encodePacked("exit(address,address,uint256,address,uint256)"))),
+            true
+        );
+        rolesAuthority.setUserRole(address(teller), 2, true);
+
+        // create role for executing intents on the teller
+        rolesAuthority.setRoleCapability(
+            42,
+            address(teller),
+            bytes4(keccak256(abi.encodePacked("deposit(((address,bool,uint256,uint256,uint256),address,uint256,bytes),bool)"))),
+            true
+        );
+        rolesAuthority.setRoleCapability(
+            42,
+            address(teller),
+            bytes4(keccak256(abi.encodePacked("withdraw(((address,bool,uint256,uint256,uint256),address,uint256,bytes))"))),
+            true
+        );
+        rolesAuthority.setRoleCapability(
+            42,
+            address(teller),
+            bytes4(keccak256(abi.encodePacked("bulkActions(((address,bool,uint256,uint256,uint256),address,uint256,bytes)[],bool[])"))),
+            true
+        );
+        // set users after deployment for now
+
+        // Make Signature Cancellation Public
+        rolesAuthority.setPublicCapability(address(teller), IntentsTeller.cancelSignature.selector, true);
+
+        // set share lock period
+        teller.setShareLockPeriod(1 days);
+
+        // set teller as before transfer hook for vault
+        boringVault.setBeforeTransferHook(address(teller));
+
         // TODO: deploy and grant roles to the teller, complete all other prod roles
         // TODO: ownership xfer
+
+        // TEMP ITEMS FOR TESTING
+        // grant rebalancer role
+        rolesAuthority.setUserRole(0x4b716b2d4a352738B72a181F051b24De20317Ff3, 7, true);
+        // set 1inch aggregator
+        manager.setAggregator(0x111111125421cA6dc452d289314280a0f8842A65, true);
 
         vm.stopBroadcast();
     }
