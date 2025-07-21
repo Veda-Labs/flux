@@ -11,6 +11,7 @@ import {RolesAuthority, Authority} from "@solmate/src/auth/authorities/RolesAuth
 import {ChainlinkDatum} from "src/datums/ChainlinkDatum.sol";
 import {Script} from "@forge-std/Script.sol";
 import {PoolId, IPoolManager} from "lib/v4-core/src/libraries/StateLibrary.sol";
+import {IDeployer} from "src/interfaces/IDeployer.sol";
 import {console} from "forge-std/console.sol";
 
 contract DeploySorellaVaultSimple is Script {
@@ -38,6 +39,8 @@ contract DeploySorellaVaultSimple is Script {
     int24 internal tickSpacing = int24(10);
 
     IntentsTeller internal teller;
+
+    IDeployer internal deployer;
 
     function run() public {
         vm.startBroadcast();
