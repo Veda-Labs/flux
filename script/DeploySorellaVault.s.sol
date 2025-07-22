@@ -14,7 +14,7 @@ import {PoolId, IPoolManager} from "lib/v4-core/src/libraries/StateLibrary.sol";
 import {IDeployer} from "src/interfaces/IDeployer.sol";
 import {console} from "forge-std/console.sol";
 
-contract DeploySorellaVaultSimple is Script {
+contract DeploySorellaVault is Script {
     RolesAuthority internal rolesAuthority;
     BoringVault internal boringVault;
     ChainlinkDatum internal datum;
@@ -40,7 +40,7 @@ contract DeploySorellaVaultSimple is Script {
 
     IntentsTeller internal teller;
 
-    IDeployer internal deployer;
+    IDeployer internal deployer = IDeployer(0x5F2F11ad8656439d5C14d9B351f8b09cDaC2A02d);
 
     function run() public {
         vm.startBroadcast();
@@ -50,16 +50,45 @@ contract DeploySorellaVaultSimple is Script {
         scriptOwner = msg.sender;
 
         // deploy roles authority with scriptOwner as owner
-        rolesAuthority = new RolesAuthority(scriptOwner, Authority(address(0)));
+        //rolesAuthority = new RolesAuthority(scriptOwner, Authority(address(0)));
+        bytes memory creationCodeRolesAuth = type(RolesAuthority).creationCode;
+        bytes memory constructorArgsRolesAuth = abi.encode(scriptOwner, Authority(address(0)));
+        rolesAuthority = RolesAuthority(deployer.deployContract("Sorella USDC-WETH RolesAuthority 0.0", creationCodeRolesAuth, constructorArgsRolesAuth, 0));
+
 
         // deploy boring vault with scriptOwner as owner
-        boringVault = new BoringVault(scriptOwner, "Test2", "T2", 18);
+        //boringVault = new BoringVault(scriptOwner, "Test2", "T2", 18);
+        bytes memory creationCodeBoringVault = type(BoringVault).creationCode;
+        bytes memory constructorArgsBoringVault = abi.encode(scriptOwner, "Sorella USDC-WETH Veda Vault", "svUSDCWETH", 18);
+        boringVault = BoringVault(payable(deployer.deployContract("Sorella USDC-WETH BoringVault 0.0", creationCodeBoringVault, constructorArgsBoringVault, 0)));
 
         // deploy datum
-        datum = new ChainlinkDatum(ETH_USD_ORACLE, 1 days, true);
+        //datum = new ChainlinkDatum(ETH_USD_ORACLE, 1 days, true);
+        bytes memory creationCodeDatum = type(ChainlinkDatum).creationCode;
+        bytes memory constructorArgsDatum = abi.encode(ETH_USD_ORACLE, 1 days, true);
+        datum = ChainlinkDatum(deployer.deployContract("Sorella USDC-WETH ChainlinkDatum 0.0", creationCodeDatum, constructorArgsDatum, 0));
 
         // deploy manager with scriptOwner as owner
-        manager = new UniswapV4FluxManager(
+        // manager = new UniswapV4FluxManager(
+        //     UniswapV4FluxManager.ConstructorArgs({
+        //         owner: address(scriptOwner),
+        //         boringVault: address(boringVault),
+        //         token0: address(token0),
+        //         token1: address(token1),
+        //         baseIn0Or1: baseIn0Or1,
+        //         nativeWrapper: nativeWrapper,
+        //         datum: address(datum),
+        //         datumLowerBound: 0.995e4,
+        //         datumUpperBound: 1.005e4,
+        //         positionManager: positionManager,
+        //         universalRouter: universalRouter,
+        //         hook: hook,
+        //         poolFee: poolFee,
+        //         tickSpacing: tickSpacing
+        //     })
+        // );
+        bytes memory creationCodeManager = type(UniswapV4FluxManager).creationCode;
+        bytes memory constructorArgsManager = abi.encode(
             UniswapV4FluxManager.ConstructorArgs({
                 owner: address(scriptOwner),
                 boringVault: address(boringVault),
@@ -77,16 +106,20 @@ contract DeploySorellaVaultSimple is Script {
                 tickSpacing: tickSpacing
             })
         );
+        manager = UniswapV4FluxManager(deployer.deployContract("Sorella USDC-WETH UniswapV4FluxManager 0.0", creationCodeManager, constructorArgsManager, 0));
 
         // deploy teller with scriptOwner as owner
-        teller = new IntentsTeller(
-            scriptOwner,
-            address(boringVault),
-            address(manager),
-            "TestTeller2",
-            "0.2",
-            7 days
-        );
+        // teller = new IntentsTeller(
+        //     scriptOwner,
+        //     address(boringVault),
+        //     address(manager),
+        //     "TestTeller2",
+        //     "0.2",
+        //     7 days
+        // );
+        bytes memory creationCodeTeller = type(IntentsTeller).creationCode;
+        bytes memory constructorArgsTeller = abi.encode(scriptOwner, address(boringVault), address(manager), "IntentsTellerUSDCWETH", "0.0", 7 days);
+        teller = IntentsTeller(deployer.deployContract("Sorella USDC-WETH IntentsTeller 0.0", creationCodeTeller, constructorArgsTeller, 0));
 
         // set roles authority as authority for boring vault
         boringVault.setAuthority(rolesAuthority);

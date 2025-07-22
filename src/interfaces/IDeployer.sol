@@ -29,11 +29,11 @@ interface IDeployer {
         bytes memory creationCode,
         bytes calldata constructorArgs,
         uint256 value
-    ) external;
+    ) external returns (address);
 
     function bundleTxs(Tx[] calldata txs) external;
 
-    function getAddress(string calldata name) external view;
+    function getAddress(string calldata name) external view returns (address);
 
-    function convertNameToBytes32(string calldata name) external pure;
+    function convertNameToBytes32(string calldata name) external pure returns (bytes32);
 }
